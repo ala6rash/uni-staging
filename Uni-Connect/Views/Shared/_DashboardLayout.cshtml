@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - UniConnect</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="~/css/design-system.css" rel="stylesheet" />
+    @await RenderSectionAsync("Styles", required: false)
+</head>
+<body>
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <div style="display: flex; align-items: center; gap: 16px; flex: 1;">
+            <button class="nav-hamburger" id="sidebarToggle" style="display:none; border:none; background:none; cursor:pointer; font-size:20px;">☰</button>
+            <a asp-controller="Home" asp-action="Index" style="text-decoration:none;">
+                <div class="nav-logo">
+                    <div class="nav-logo-icon">🎓</div>
+                    <span>UniConnect</span>
+                </div>
+            </a>
+            <div class="nav-search">
+                <input type="text" class="form-input" placeholder="🔍 Search questions..." />
+            </div>
+        </div>
+        <div class="nav-actions">
+            <div class="nav-bell" id="notifBell">
+                🔔
+                <span class="nav-bell-badge" id="notifBadge">3</span>
+            </div>
+            <div style="position: relative;">
+                <button class="nav-user" id="navUserBtn" style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; transition: background .2s;" onmouseover="this.style.background='#EEF2FF'" onmouseout="this.style.background='none'">
+                    <div class="av av-sm"><img src="https://via.placeholder.com/44" alt="User"/></div>
+                </button>
+                <div class="nav-user-dropdown" id="navUserDropdown">
+                    <a href="#" class="nav-dropdown-item" style="text-decoration:none;">👤 My Profile</a>
+                    <a href="#" class="nav-dropdown-item" style="text-decoration:none;">⚙️ Settings</a>
+                    <hr style="margin:0; border:none; border-top:1px solid #E2E8F0;">
+                    <a asp-controller="Login" asp-action="Logout" class="nav-dropdown-item logout" style="text-decoration:none;">🚪 Sign Out</a>
+                </div>
+            </div>
+        </div>
+    </navbar>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+        <a href="#" class="sidebar-user">
+            <div class="av av-md"><img src="https://via.placeholder.com/60" alt="User"/></div>
+            <div>
+                <div class="sidebar-user-name">@(User.FindFirst("FullName")?.Value ?? "Student")</div>
+                <div class="sidebar-user-pts">🪙 1,250 points</div>
+            </div>
+        </a>
+
+        <nav class="sidebar-nav">
+            <a asp-controller="Dashboard" asp-action="Dashboard" class="nav-item active">🏠 Home Feed</a>
+            <a asp-controller="Dashboard" asp-action="CreatePost" class="nav-item">✏️ Ask Question</a>
+            <a asp-controller="Dashboard" asp-action="ChatPage" class="nav-item">💬 Private Sessions <span class="nav-badge">2</span></a>
+            <a asp-controller="Dashboard" asp-action="Leaderboard" class="nav-item">🏆 Leaderboard</a>
+            <a href="#notifications" class="nav-item">🔔 Notifications <span class="nav-badge">3</span></a>
+            <a href="#profile" class="nav-item">👤 My Profile</a>
+            <a href="#rewards" class="nav-item">🪙 Points & Rewards</a>
+            <a href="#settings" class="nav-item">⚙️ Settings</a>
+        </nav>
+
+        <div class="pts-widget">
+            <div class="pts-widget-num">1,250</div>
+            <div class="pts-widget-label">POINTS THIS SEMESTER</div>
+            <div class="pts-widget-bar">
+                <div class="pts-widget-fill" style="width: 62%;"></div>
+            </div>
+            <div class="pts-widget-sub">1,000 more to Level 10 🎯</div>
+        </div>
+
+        <div class="sidebar-logout">🚪 Sign Out</div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <div class="app-wrap">
+        <div class="main">
+            @RenderBody()
+        </div>
+    </div>
+
+    <!-- CSS for nav hamburger on mobile -->
+    <style>
+        @media (max-width: 768px) {
+            .nav-hamburger { display: block !important; }
+            .nav-search { display: none !important; }
+        }
+    </style>
+
+    <!-- JavaScript -->
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script>
+        // Sidebar toggle
+        document.getElementById('sidebarToggle')?.addEventListener('click', function() {
+            document.getElementById('sidebar').classList.toggle('open');
+        });
+
+        // User dropdown
+        document.getElementById('navUserBtn')?.addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('navUserDropdown').classList.toggle('open');
+        });
+        document.addEventListener('click', function() {
+            document.getElementById('navUserDropdown').classList.remove('open');
+        });
+
+        // Toast function
+        function showToast(msg, type = 'success') {
+            const t = document.createElement('div');
+            t.className = `toast ${type === 'error' ? 'toast-error' : type === 'warn' ? 'toast-warn' : ''}`;
+            t.textContent = msg;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+    </script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
