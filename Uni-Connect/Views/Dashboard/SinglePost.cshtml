@@ -70,7 +70,9 @@
                                     <span style="background: #065F46; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-left: 8px;">✓ Accepted Answer</span>
                                 }
                             </div>
-                            <span style="font-size: 13px; color: #64748B; font-weight: 600;">👍 @answer.Upvotes</span>
+                            <button class="upvote-btn" data-answer-id="@answer.AnswerID" style="background:none; border:none; cursor:pointer; font-size:13px; color:#64748B; font-weight:600;">
+                                <span class="upvote-count" data-upvote-count="@answer.AnswerID">👍 @answer.Upvotes</span>
+                            </button>
                         </div>
                         <p style="font-size: 14px; color: #1E293B; line-height: 1.6; margin: 0; white-space: pre-wrap;">@answer.Content</p>
                     </div>
@@ -88,6 +90,67 @@
                 </p>
             </div>
         }
+
+        <!-- Answer submission form -->
+        @if (User.Identity.IsAuthenticated)
+        {
+            <div style="margin-top:20px; background:white; border-radius:12px; padding:20px; border:1.5px solid #E2E8F0; margin-top:16px;">
+                <h3 style="margin-top:0;">Your Answer</h3>
+                <form asp-action="PostAnswer" method="post" style="margin-top:8px;">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="postId" value="@Model.PostID" />
+                    <textarea name="content" rows="5" style="width:100%; padding:12px; border-radius:8px; border:1px solid #E6EEF8;" placeholder="Write your answer here..." required></textarea>
+                    <div style="text-align:right; margin-top:8px;">
+                        <button type="submit" class="btn btn-primary" style="background:#3D52A0; color:#fff; padding:8px 14px; border-radius:8px; border:none;">Post Answer</button>
+                    </div>
+                </form>
+            </div>
+        }
+        else
+        {
+            <div style="margin-top:20px; text-align:center;">
+                <a asp-controller="Login" asp-action="Login_Page" class="btn" style="color:#3D52A0;">Sign in to post an answer</a>
+            </div>
+        }
+
+        <!-- Anti-forgery token for AJAX (upvotes) -->
+        <form id="antiforgeryForm" style="display:none;">
+            @Html.AntiForgeryToken()
+        </form>
+
+        <script>
+            (function() {
+                function getToken() {
+                    var el = document.querySelector('#antiforgeryForm input[name="__RequestVerificationToken"]');
+                    return el ? el.value : '';
+                }
+
+                document.querySelectorAll('.upvote-btn').forEach(function(btn) {
+                    btn.addEventListener('click', async function (e) {
+                        e.preventDefault();
+                        var id = this.dataset.answerId;
+                        var token = getToken();
+                        try {
+                            var resp = await fetch('@Url.Action("UpvoteAnswer","Dashboard")', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                    'RequestVerificationToken': token
+                                },
+                                body: 'answerId=' + encodeURIComponent(id)
+                            });
+                            if (!resp.ok) throw new Error('Network response was not ok');
+                            var data = await resp.json();
+                            var display = this.querySelector('.upvote-count') || document.querySelector('[data-upvote-count="' + id + '"]');
+                            if (display) display.textContent = '👍 ' + data.upvotes;
+                        } catch (err) {
+                            console.error(err);
+                            alert('Failed to upvote. Please try again.');
+                        }
+                    });
+                });
+            })();
+        </script>
     }
     else
     {
