@@ -32,6 +32,8 @@ namespace Uni_Connect.Controllers
                 return View(model);
             }
 
+            // Domain check removed from Login (allow any account in DB to login)
+
             try
             {
                 var user = await _context.Users
@@ -84,7 +86,7 @@ namespace Uni_Connect.Controllers
                     new Claim(ClaimTypes.NameIdentifier, user.UserID.ToString()),
                     new Claim(ClaimTypes.Name, user.Name),
                     new Claim(ClaimTypes.Email, user.Email),
-                    new Claim(ClaimTypes.Role, user.Role?? "User")
+                    new Claim(ClaimTypes.Role, user.Role ?? "Student")
                 };
 
                 var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -93,6 +95,9 @@ namespace Uni_Connect.Controllers
                 await HttpContext.SignInAsync(
                     CookieAuthenticationDefaults.AuthenticationScheme,
                     principal);
+
+                if (user.Role == "Admin")
+                    return RedirectToAction("AdminDashboard", "Admin");
 
                 return RedirectToAction("Dashboard", "Dashboard");
             }
@@ -124,9 +129,20 @@ namespace Uni_Connect.Controllers
                 return View(model);
             }
 
-            if (!model.Email.ToLower().EndsWith("@philadelphia.edu.jo"))
+            string email = model.Email.ToLower().Trim();
+            string domain = "@philadelphia.edu.jo";
+
+            if (!email.EndsWith(domain))
             {
-                ModelState.AddModelError("Email", "Only Philadelphia University emails (@philadelphia.edu.jo) are allowed");
+                ModelState.AddModelError("Email", $"Only university emails ({domain}) are allowed");
+                return View(model);
+            }
+
+            // Ensure numeric Student ID for university domain
+            string prefix = email.Split('@')[0];
+            if (!prefix.All(char.IsDigit))
+            {
+                ModelState.AddModelError("Email", "Registration is restricted to Student IDs (numbers only). Example: 20211234@philadelphia.edu.jo. For staff/admin accounts, please contact system support.");
                 return View(model);
             }
 
@@ -143,25 +159,35 @@ namespace Uni_Connect.Controllers
 
                 string universityId = model.Email.Split('@')[0];
 
-                string hashedPassword = BCrypt.Net.BCrypt.HashPassword(model.Password);
-
                 var newUser = new User
                 {
                     UniversityID = universityId,
-                    Name = model.Name?.Trim() ?? "",
-                    Username = universityId,
-                    Email = model.Email?.ToLower().Trim() ?? "",
-                    PasswordHash = hashedPassword,
+                    Name = model.Name,
+                    Username = universityId, // Use UniversityID as username
+                    Email = email,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(model.Password),
                     Role = "Student",
                     Faculty = model.Faculty,
                     YearOfStudy = model.YearOfStudy,
-                    Points = 50,
-                    IsDeleted = false,
-                    CreatedAt = DateTime.Now,
-                    ProfileImageUrl = null
+                    Points = 0, // Start with 0 to track bonus via transaction
+                    CreatedAt = DateTime.UtcNow
                 };
 
                 _context.Users.Add(newUser);
+                await _context.SaveChangesAsync();
+
+                // Add Welcome Bonus Transaction
+                _context.PointsTransactions.Add(new PointsTransaction
+                {
+                    UserID = newUser.UserID,
+                    Title = "Welcome Bonus",
+                    Detail = "Welcome to UniConnect!",
+                    Amount = 50,
+                    Icon = "🎉",
+                    CreatedAt = DateTime.UtcNow
+                });
+                
+                newUser.Points = 50;
                 await _context.SaveChangesAsync();
 
                 TempData["SuccessMessage"] = "Account created successfully! You earned +50 welcome points 🎉 Please sign in.";

@@ -19,11 +19,14 @@ namespace Uni_Connect.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public bool IsDeleted { get; set; } = false;
         public string? ImageUrl { get; set; }
+        public string? CourseCode { get; set; }
+        public bool IsEndorsed { get; set; } = false;
 
         // Navigation
         public User User { get; set; }
         public Category Category { get; set; }
         public ICollection<Answer> Answers { get; set; }
         public ICollection<PostTag> PostTags { get; set; }
+        public ICollection<PostUpvote> PostUpvotes { get; set; }
     }
 }

@@ -19,6 +19,8 @@ namespace Uni_Connect.Models
         public DbSet<Report> Reports { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<PointsTransaction> PointsTransactions { get; set; }
+        public DbSet<PostUpvote> PostUpvotes { get; set; }
+        public DbSet<AnswerUpvote> AnswerUpvotes { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -34,6 +36,14 @@ namespace Uni_Connect.Models
                 .IsUnique();
             modelBuilder.Entity<Category>()
                 .HasIndex(c => c.Name)
+                .IsUnique();
+
+            // Ensure unique upvotes (One user, one upvote per item)
+            modelBuilder.Entity<PostUpvote>()
+                .HasIndex(pu => new { pu.PostID, pu.UserID })
+                .IsUnique();
+            modelBuilder.Entity<AnswerUpvote>()
+                .HasIndex(au => new { au.AnswerID, au.UserID })
                 .IsUnique();
 
             // Composite Key for PostTag

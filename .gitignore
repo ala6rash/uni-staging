@@ -361,3 +361,10 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+Cleanup_Backup/
+*.db
+*.db-shm
+*.db-wal
+
+# User-uploaded files (runtime content, not source code)
+Uni-Connect/wwwroot/uploads/

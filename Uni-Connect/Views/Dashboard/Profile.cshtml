@@ -1,4 +1,4 @@
-@model Uni_Connect.Models.User
+﻿@model Uni_Connect.Models.User
 @{
     ViewData["Title"] = "My Profile — UniConnect";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
@@ -157,7 +157,7 @@
         <div class="profile-info">
             <h1>@Model.Name</h1>
             <div class="profile-badges">
-                <span class="chip chip-indigo" style="display:inline-flex; align-items:center; gap:6px;"><i data-lucide="monitor" style="width:14px; height:14px;"></i> @Model.Faculty</span>
+                <span class="chip chip-indigo" style="display:inline-flex; align-items:center; gap:6px;"><i data-lucide="building-2" style="width:14px; height:14px;"></i> @Model.Faculty</span>
                 <span class="chip chip-violet" style="display:inline-flex; align-items:center; gap:6px;"><i data-lucide="graduation-cap" style="width:14px; height:14px;"></i> @Model.YearOfStudy</span>
                 <span class="chip chip-amber" style="display:inline-flex; align-items:center; gap:6px;"><i data-lucide="coins" style="width:14px; height:14px;"></i> @Model.Points pts</span>
             </div>
@@ -166,7 +166,7 @@
             </p>
         </div>
         <div class="profile-actions">
-            <a asp-action="Settings" class="btn btn-ghost btn-sm" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="edit-3" style="width:16px; height:16px;"></i> Edit Profile</a>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="switchTab('settings', document.querySelector('[onclick*=\'settings\']'))" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="edit-3" style="width:16px; height:16px;"></i> Edit Profile</button>
         </div>
     </div>
 
@@ -177,20 +177,20 @@
             <div class="stat-label">🪙 Points</div>
         </div>
         <div class="stat-item">
-            <div class="stat-num" style="color: var(--emerald)">47</div>
+            <div class="stat-num" style="color: var(--emerald)">@Model.Answers.Count</div>
             <div class="stat-label">💬 Answers</div>
         </div>
         <div class="stat-item">
-            <div class="stat-num" style="color: var(--amber)">12</div>
+            <div class="stat-num" style="color: var(--amber)">@Model.Posts.Count</div>
             <div class="stat-label">❓ Questions</div>
         </div>
         <div class="stat-item">
-            <div class="stat-num" style="color: var(--violet)">8</div>
+            <div class="stat-num" style="color: var(--violet)">@ViewBag.SessionCount</div>
             <div class="stat-label">🎓 Sessions</div>
         </div>
         <div class="stat-item">
-            <div class="stat-num" style="color: var(--rose)">4.8</div>
-            <div class="stat-label">⭐ Rating</div>
+            <div class="stat-num" style="color: var(--rose)">@(Model.Points / 500 + 1)</div>
+            <div class="stat-label">⭐ Level</div>
         </div>
     </div>
 
@@ -213,75 +213,147 @@
     <div class="tabs">
         <button class="tab active" onclick="switchTab('answers',this)" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="message-square" style="width:16px; height:16px;"></i> Recent Answers</button>
         <button class="tab" onclick="switchTab('questions',this)" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="help-circle" style="width:16px; height:16px;"></i> Your Questions</button>
-        <button class="tab" onclick="switchTab('sessions',this)" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="graduation-cap" style="width:16px; height:16px;"></i> Sessions</button>
+        <button class="tab" onclick="switchTab('settings',this)" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="settings" style="width:16px; height:16px;"></i> Settings</button>
     </div>
 
     <!-- Tab Content: Answers -->
     <div id="tab-answers">
         <div class="activity-list">
-            <div class="activity-card">
-                <div class="activity-meta">
-                    <span class="chip chip-emerald">✓ Best Answer</span>
-                    <span class="chip chip-violet">CS302</span>
-                    <span>+15 pts</span>
-                </div>
-                <a href="#" style="text-decoration: none; color: var(--indigo); font-weight: 700;">
-                    <div class="activity-title">How does AVL tree rotation actually work?</div>
-                </a>
-                <div class="activity-stats">
-                    <span>👍 38 upvotes</span>
-                    <span>👁️ 124 views</span>
-                </div>
-            </div>
-            
-            <div class="activity-card">
-                <div class="activity-meta">
-                    <span class="chip chip-indigo">Top Answer</span>
-                    <span class="chip chip-violet">CS401</span>
-                    <span>+10 pts</span>
-                </div>
-                <a href="#" style="text-decoration: none; color: var(--indigo); font-weight: 700;">
-                    <div class="activity-title">Difference between Dijkstra and Bellman-Ford algorithms?</div>
-                </a>
-                <div class="activity-stats">
-                    <span>👍 22 upvotes</span>
-                    <span>👁️ 84 views</span>
-                </div>
-            </div>
+            @if (Model.Answers != null && Model.Answers.Any())
+            {
+                foreach (var answer in Model.Answers.OrderByDescending(a => a.CreatedAt).Take(5))
+                {
+                    <div class="activity-card" onclick="window.location.href='@Url.Action("SinglePost", new { id = answer.PostID })'">
+                        <div class="activity-meta">
+                            @if (answer.IsAccepted) { <span class="chip chip-emerald">✓ Best Answer</span> }
+                            <span class="chip chip-violet">@answer.Post?.Title.Substring(0, Math.Min(answer.Post.Title.Length, 15))...</span>
+                            <span>👍 @answer.Upvotes upvotes</span>
+                        </div>
+                        <div class="activity-title">@answer.Content.Substring(0, Math.Min(answer.Content.Length, 100))...</div>
+                        <div class="activity-stats">
+                            <span>📅 @answer.CreatedAt.ToString("MMM dd, yyyy")</span>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <p style="text-align:center; color:var(--text-2); padding:20px;">No answers yet.</p>
+            }
         </div>
     </div>
 
     <!-- Tab Content: Questions (Hidden) -->
     <div id="tab-questions" class="hidden">
         <div class="activity-list">
-            <div class="activity-card">
-                <div class="activity-meta">
-                    <span class="chip chip-emerald">✓ Solved</span>
-                    <span class="chip chip-indigo">CS302</span>
-                </div>
-                <div class="activity-title">How do I optimize binary search in a rotated array?</div>
-                <div class="activity-stats">
-                    <span>💬 4 answers</span>
-                    <span>👁️ 56 views</span>
-                </div>
-            </div>
+            @if (Model.Posts != null && Model.Posts.Any())
+            {
+                foreach (var post in Model.Posts.OrderByDescending(p => p.CreatedAt).Take(5))
+                {
+                    <div class="activity-card" onclick="window.location.href='@Url.Action("SinglePost", new { id = post.PostID })'">
+                        <div class="activity-meta">
+                            @if (post.Answers != null && post.Answers.Any(a => a.IsAccepted)) { <span class="chip chip-emerald">✓ Solved</span> }
+                            <span class="chip chip-indigo">@post.Category?.Name</span>
+                        </div>
+                        <div class="activity-title">@post.Title</div>
+                        <div class="activity-stats">
+                            <span>👍 @post.Upvotes upvotes</span>
+                            <span>💬 @(post.Answers?.Count ?? 0) answers</span>
+                            <span>👁️ @post.ViewsCount views</span>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <p style="text-align:center; color:var(--text-2); padding:20px;">No questions asked yet.</p>
+            }
         </div>
     </div>
 
     <!-- Tab Content: Sessions (Hidden) -->
-    <div id="tab-sessions" class="hidden">
-        <div style="text-align: center; padding: 40px 20px; background: var(--surface); border-radius: var(--radius);">
-            <div style="font-size: 28px; margin-bottom: 12px; display:flex; justify-content:center;"><i data-lucide="graduation-cap" style="width:48px; height:48px; color:var(--text-3);"></i></div>
-            <div style="font-size: 16px; font-weight: 700; margin-bottom: 6px;">No sessions yet</div>
-            <div style="font-size: 13px; color: var(--text-2);">Start your first tutoring session to help students and earn points!</div>
-        </div>
+    <div id="tab-settings" class="hidden">
+        @{
+            var settingsModel = ViewBag.SettingsModel as Uni_Connect.ViewModels.SettingsViewModel;
+        }
+        @if (settingsModel != null)
+        {
+            <form asp-action="Settings" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="UserID" value="@settingsModel.UserID" />
+                <div class="card" style="background: white; border: 1.5px solid var(--border); border-radius: 12px; padding: 24px;">
+                    <div style="font-weight: 800; font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+                        <i data-lucide="circle-user" style="vertical-align: middle; margin-right: 8px;"></i> Profile Information
+                    </div>
+                    
+                    <div style="display:flex; align-items:center; gap:20px; margin-bottom:24px;">
+                        <div class="av av-xl" style="border:4px solid var(--indigo-light)">
+                            <img id="profilePreview" src="@(string.IsNullOrEmpty(settingsModel.ProfileImageUrl) ? $"https://ui-avatars.com/api/?name={settingsModel.Name}&background=3D52A0&color=fff&size=80" : settingsModel.ProfileImageUrl)" alt="Avatar"/>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="promptImageUrl()">Change Photo</button>
+                            <p style="font-size:11px; color:var(--text-2); margin-top:6px;">Paste an image URL to update your profile picture.</p>
+                        </div>
+                        <input type="hidden" name="ProfileImageUrl" id="hiddenImageUrl" value="@settingsModel.ProfileImageUrl" />
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <div class="form-group">
+                            <label class="form-label">Full Name</label>
+                            <input name="Name" value="@settingsModel.Name" class="form-input" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email (Private)</label>
+                            <input value="@settingsModel.Email" class="form-input" disabled />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Faculty</label>
+                            <select name="Faculty" class="form-input form-select">
+                                <option value="Faculty of Information Technology" selected="@(settingsModel.Faculty == "Faculty of Information Technology")">Faculty of Information Technology</option>
+                                <option value="Faculty of Engineering" selected="@(settingsModel.Faculty == "Faculty of Engineering")">Faculty of Engineering</option>
+                                <option value="Faculty of Business" selected="@(settingsModel.Faculty == "Faculty of Business")">Faculty of Business</option>
+                                <option value="Faculty of Law" selected="@(settingsModel.Faculty == "Faculty of Law")">Faculty of Law</option>
+                                <option value="Faculty of Pharmacy" selected="@(settingsModel.Faculty == "Faculty of Pharmacy")">Faculty of Pharmacy</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Year</label>
+                            <select name="YearOfStudy" class="form-input form-select">
+                                <option value="Year 1" selected="@(settingsModel.YearOfStudy == "Year 1")">Year 1</option>
+                                <option value="Year 2" selected="@(settingsModel.YearOfStudy == "Year 2")">Year 2</option>
+                                <option value="Year 3" selected="@(settingsModel.YearOfStudy == "Year 3")">Year 3</option>
+                                <option value="Year 4" selected="@(settingsModel.YearOfStudy == "Year 4")">Year 4</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+
+                <div class="card" style="background: white; border: 1.5px solid var(--border); border-radius: 12px; padding: 24px; margin-top: 20px;">
+                    <div style="font-weight: 800; font-size: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 12px;">
+                        <i data-lucide="shield-check" style="vertical-align: middle; margin-right: 8px;"></i> Security
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="form-group">
+                            <label class="form-label">New Password</label>
+                            <input name="NewPassword" type="password" class="form-input" placeholder="Leave blank to keep current" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Current Password</label>
+                            <input name="CurrentPassword" type="password" class="form-input" placeholder="Required for changes" />
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="margin-top: 20px;">Update Password</button>
+                </div>
+            </form>
+        }
     </div>
 </div>
 
 <script>
     function switchTab(tabName, el) {
         // Hide all tabs
-        ['answers', 'questions', 'sessions'].forEach(t => {
+        ['answers', 'questions', 'settings'].forEach(t => {
             const tab = document.getElementById('tab-' + t);
             if (tab) tab.classList.add('hidden');
         });
@@ -293,5 +365,14 @@
         // Update active tab button
         document.querySelectorAll('.tab').forEach(btn => btn.classList.remove('active'));
         if (el) el.classList.add('active');
+    }
+
+    function promptImageUrl() {
+        const url = prompt("Please enter the URL of your profile image:");
+        if (url && url.length > 10) {
+            document.getElementById('hiddenImageUrl').value = url;
+            document.getElementById('profilePreview').src = url;
+            showToast("Profile image URL updated!", "success");
+        }
     }
 </script>

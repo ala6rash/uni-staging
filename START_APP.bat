@@ -6,8 +6,11 @@ echo ============================================
 echo      UNI-CONNECT TEST CREDENTIALS
 echo ============================================
 echo.
-echo Email:    test@uni.ac.uk
+echo Email:    20240001@philadelphia.edu.jo
 echo Password: Test@1234
+echo.
+echo Admin:    ahmadalatrash726@gmail.com
+echo Password: @Cometothebored1314@
 echo.
 echo Starting app at http://localhost:5282
 echo.

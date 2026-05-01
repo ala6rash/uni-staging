@@ -40,7 +40,8 @@ namespace Uni_Connect.Services
                 CategoryID = category.CategoryID,
                 CreatedAt = DateTime.UtcNow,
                 IsDeleted = false,
-                ImageUrl = imageUrl
+                ImageUrl = imageUrl,
+                CourseCode = model.CourseCode
             };
 
             _context.Posts.Add(post);
@@ -95,6 +96,19 @@ namespace Uni_Connect.Services
             await _pointService.AwardPoints(userId, 5, "Answered a Question", 
                 post.Title.Length > 25 ? post.Title.Substring(0, 25) + "..." : post.Title, "🤝");
 
+            // Create Notification for the Post Author
+            if (post.UserID != userId)
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    UserID = post.UserID,
+                    Type = "Answer",
+                    ReferenceID = post.PostID,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
             await _context.SaveChangesAsync();
             return answer;
         }
@@ -108,6 +122,17 @@ namespace Uni_Connect.Services
 
             if (answer == null) return false;
 
+            // Prevent self-upvoting (Logic Fault Fix)
+            if (answer.UserID == userId) return false;
+
+            // Prevent duplicate upvoting
+            var existingUpvote = await _context.AnswerUpvotes
+                .AnyAsync(au => au.AnswerID == answerId && au.UserID == userId);
+            if (existingUpvote) return false;
+
+            // Record the upvote
+            _context.AnswerUpvotes.Add(new AnswerUpvote { AnswerID = answerId, UserID = userId });
+
             answer.Upvotes += 1;
             
             // Award points to the answer author
@@ -120,9 +145,167 @@ namespace Uni_Connect.Services
             return true;
         }
 
+        public async Task<bool> AcceptAnswer(int answerId, int userId)
+        {
+            var answer = await _context.Answers
+                .Include(a => a.Post)
+                .Include(a => a.User)
+                .FirstOrDefaultAsync(a => a.AnswerID == answerId && !a.IsDeleted);
+
+            if (answer == null || answer.Post.UserID != userId) return false;
+
+            // Prevent multiple accepted answers on the same post
+            var alreadyAccepted = await _context.Answers
+                .AnyAsync(a => a.PostID == answer.PostID && a.IsAccepted && !a.IsDeleted);
+            if (alreadyAccepted) return false;
+
+            // Mark as accepted
+            answer.IsAccepted = true;
+            
+            // Award points for best answer
+            if (answer.User != null)
+            {
+                await _pointService.AwardPoints(answer.User.UserID, 15, "Marked as Best Answer", "Your answer was accepted as the best", "🏆");
+            }
+
+            // Create Notification for the Answer Author
+            if (answer.UserID != userId)
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    UserID = answer.UserID,
+                    Type = "BestAnswer",
+                    ReferenceID = answer.PostID,
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> UpvotePost(int postId, int userId)
+        {
+            var post = await _context.Posts
+                .Include(p => p.User)
+                .FirstOrDefaultAsync(p => p.PostID == postId && !p.IsDeleted);
+
+            if (post == null) return false;
+
+            // Prevent self-upvoting
+            if (post.UserID == userId) return false;
+
+            // Prevent duplicate upvoting
+            var existingUpvote = await _context.PostUpvotes
+                .AnyAsync(pu => pu.PostID == postId && pu.UserID == userId);
+            if (existingUpvote) return false;
+
+            // Record the upvote
+            _context.PostUpvotes.Add(new PostUpvote { PostID = postId, UserID = userId });
+
+            post.Upvotes += 1;
+
+            // Award points to post author
+            if (post.User != null)
+            {
+                await _pointService.AwardPoints(post.User.UserID, 5, "Post Upvoted", "Your question was upvoted", "🔥");
+            }
+
+            // Create notification
+            _context.Notifications.Add(new Notification
+            {
+                UserID = post.UserID,
+                Type = "PostUpvote",
+                ReferenceID = post.PostID,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> RequestTutoring(int postId, int userId, string description)
+        {
+            var post = await _context.Posts.FirstOrDefaultAsync(p => p.PostID == postId && !p.IsDeleted);
+            if (post == null || post.UserID == userId) return false;
+
+            // Check if already requested
+            var existing = await _context.Requests.AnyAsync(r => r.PostID == postId && r.OwnerID == userId);
+            if (existing) return false;
+
+            var request = new Request
+            {
+                PostID = postId,
+                OwnerID = userId,
+                Description = description,
+                Status = "Open",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Requests.Add(request);
+
+            // Notify post author
+            _context.Notifications.Add(new Notification
+            {
+                UserID = post.UserID,
+                Type = "TutoringRequest",
+                ReferenceID = postId,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> AcceptTutoring(int requestId, int userId)
+        {
+            var request = await _context.Requests
+                .Include(r => r.Post)
+                .FirstOrDefaultAsync(r => r.RequestID == requestId && !r.IsDeleted);
+
+            if (request == null || request.Post.UserID != userId) return false;
+
+            request.Status = "Accepted";
+
+            // Create Private Session
+            var session = new PrivateSession
+            {
+                RequestID = requestId,
+                StudentID = request.OwnerID,
+                HelperID = userId,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true,
+                IsDeleted = false
+            };
+
+            _context.PrivateSessions.Add(session);
+
+            // Notify student
+            _context.Notifications.Add(new Notification
+            {
+                UserID = request.OwnerID,
+                Type = "SessionAccepted",
+                ReferenceID = requestId,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         private async Task<string?> SaveImage(IFormFile? file, string folder)
         {
             if (file == null || file.Length == 0) return null;
+
+            if (file.Length > 5 * 1024 * 1024) return null;
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(ext)) return null;
 
             var uploadsFolder = Path.Combine(_environment.WebRootPath, "uploads", folder);
             if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);

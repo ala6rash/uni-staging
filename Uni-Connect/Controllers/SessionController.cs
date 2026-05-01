@@ -1,0 +1,159 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using Uni_Connect.Models;
+
+namespace Uni_Connect.Controllers
+{
+    [Authorize]
+    public class SessionController : Controller
+    {
+        private readonly ApplicationDbContext _context;
+
+        public SessionController(ApplicationDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<IActionResult> ChatPage()
+        {
+            var me = GetCurrentUserId();
+
+            var activeSessions = await _context.PrivateSessions
+                .Include(s => s.Student)
+                .Include(s => s.Helper)
+                .Include(s => s.Messages)
+                .Where(s => (s.StudentID == me || s.HelperID == me) && s.IsActive && !s.IsDeleted)
+                .ToListAsync();
+
+            // Incoming = open requests on posts the current user owns
+            var incomingRequests = await _context.Requests
+                .Include(r => r.Owner)
+                .Include(r => r.Post)
+                .Where(r => r.Post.UserID == me && r.Status == "Open" && !r.IsDeleted)
+                .ToListAsync();
+
+            var history = await _context.PrivateSessions
+                .Include(s => s.Student)
+                .Include(s => s.Helper)
+                .Where(s => (s.StudentID == me || s.HelperID == me) && !s.IsActive && !s.IsDeleted)
+                .OrderByDescending(s => s.CreatedAt)
+                .ToListAsync();
+
+            ViewBag.ActiveSessions = activeSessions;
+            ViewBag.IncomingRequests = incomingRequests;
+            ViewBag.History = history;
+            ViewBag.CurrentUserId = me;
+
+            return View();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> SendRequest(int recipientId, int postId, string description)
+        {
+            var me = GetCurrentUserId();
+
+            if (me == recipientId)
+                return BadRequest(new { message = "You cannot request a session with yourself." });
+
+            // prevent duplicate open request on the same post
+            var existing = await _context.Requests.AnyAsync(r =>
+                r.OwnerID == me && r.PostID == postId &&
+                r.Status == "Open" && !r.IsDeleted);
+
+            if (existing)
+                return BadRequest(new { message = "You already have a pending request on this post." });
+
+            var request = new Request
+            {
+                OwnerID = me,
+                PostID = postId,
+                Description = description,
+                Status = "Open",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Requests.Add(request);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Request sent! The post author will see it in their Incoming Requests." });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AcceptRequest(int requestId)
+        {
+            var me = GetCurrentUserId();
+
+            var request = await _context.Requests
+                .Include(r => r.Post)
+                .FirstOrDefaultAsync(r => r.RequestID == requestId &&
+                                          r.Post.UserID == me &&
+                                          r.Status == "Open" &&
+                                          !r.IsDeleted);
+
+            if (request == null) return NotFound();
+
+            var sessionExists = await _context.PrivateSessions.AnyAsync(s => s.RequestID == requestId);
+            if (sessionExists) return BadRequest("Session already exists.");
+
+            request.Status = "Accepted";
+
+            var session = new PrivateSession
+            {
+                RequestID = request.RequestID,
+                StudentID = request.OwnerID,
+                HelperID = me,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true,
+                IsDeleted = false
+            };
+
+            _context.PrivateSessions.Add(session);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { sessionId = session.PrivateSessionID });
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> DeclineRequest(int requestId)
+        {
+            var me = GetCurrentUserId();
+
+            var request = await _context.Requests
+                .Include(r => r.Post)
+                .FirstOrDefaultAsync(r => r.RequestID == requestId &&
+                                          r.Post.UserID == me &&
+                                          r.Status == "Open" &&
+                                          !r.IsDeleted);
+
+            if (request == null) return NotFound();
+
+            request.Status = "Declined";
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> CloseSession(int sessionId)
+        {
+            var me = GetCurrentUserId();
+
+            var session = await _context.PrivateSessions
+                .FirstOrDefaultAsync(s => s.PrivateSessionID == sessionId &&
+                                          (s.StudentID == me || s.HelperID == me) &&
+                                          !s.IsDeleted);
+
+            if (session == null) return NotFound();
+
+            session.IsActive = false;
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+        private int GetCurrentUserId() =>
+            int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+    }
+}

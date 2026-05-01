@@ -1,0 +1,247 @@
+﻿@model Uni_Connect.Models.User
+@{
+    ViewData["Title"] = (Model?.Name ?? "Profile") + " — UniConnect";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+}
+
+@section Styles {
+<style>
+    .profile-wrapper { max-width: 860px; margin: 0 auto; }
+
+    .profile-cover {
+        height: 160px; border-radius: 16px; overflow: hidden;
+        position: relative; margin-bottom: 56px;
+        background: linear-gradient(135deg, #EEF2FF 0%, #EDE9FE 100%);
+    }
+    .profile-cover-overlay {
+        position: absolute; inset: 0;
+        background: linear-gradient(180deg, transparent 40%, rgba(61,82,160,.15));
+    }
+    .profile-avatar-wrap {
+        position: absolute; bottom: -46px; left: 24px;
+    }
+    .profile-avatar {
+        width: 110px; height: 110px; border-radius: 16px;
+        border: 4px solid white; overflow: hidden;
+        box-shadow: 0 4px 16px rgba(15,23,42,.15);
+    }
+    .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .profile-stats-grid {
+        display: grid; grid-template-columns: repeat(4, 1fr);
+        gap: 12px; margin-bottom: 28px;
+    }
+    .pstat {
+        background: white; border: 1px solid var(--border);
+        border-radius: 12px; padding: 16px; text-align: center;
+    }
+    .pstat-num { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+    .pstat-label { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .5px; }
+
+    .activity-card {
+        background: white; border: 1px solid var(--border);
+        border-radius: 12px; padding: 18px; margin-bottom: 14px;
+        cursor: pointer; transition: all .2s;
+        text-decoration: none; display: block; color: inherit;
+    }
+    .activity-card:hover { box-shadow: 0 4px 16px rgba(61,82,160,.1); transform: translateY(-1px); border-color: var(--indigo); }
+
+    .tabs { display: flex; gap: 16px; border-bottom: 2px solid var(--border); margin-bottom: 24px; }
+    .tab-btn {
+        padding: 12px 0; background: none; border: none;
+        font-size: 14px; font-weight: 600; color: var(--text-2);
+        cursor: pointer; border-bottom: 3px solid transparent;
+        margin-bottom: -2px; transition: all .2s;
+        display: inline-flex; align-items: center; gap: 8px;
+    }
+    .tab-btn:hover { color: var(--indigo); }
+    .tab-btn.active { color: var(--indigo); font-weight: 700; border-bottom-color: var(--indigo); }
+</style>
+}
+
+<div class="profile-wrapper">
+
+    <!-- Back -->
+    <a asp-action="Dashboard" style="display:inline-flex; align-items:center; gap:6px; color:var(--text-2); text-decoration:none; font-size:13px; font-weight:600; margin-bottom:20px;">
+        <i data-lucide="arrow-left" style="width:16px; height:16px;"></i> Back to Feed
+    </a>
+
+    @if (Model != null)
+    {
+        <!-- Cover -->
+        <div class="profile-cover">
+            <div class="profile-cover-overlay"></div>
+            <div class="profile-avatar-wrap">
+                <div class="profile-avatar">
+                    <img src="@(string.IsNullOrEmpty(Model.ProfileImageUrl)
+                        ? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(Model.Name)}&background=3D52A0&color=fff&size=120"
+                        : Model.ProfileImageUrl)"
+                         alt="@Model.Name" />
+                </div>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+            <div>
+                <h1 style="font-size:26px; font-weight:800; margin:0 0 8px 0;">@Model.Name</h1>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <span class="chip chip-indigo" style="display:inline-flex; align-items:center; gap:5px;">
+                        <i data-lucide="building-2" style="width:13px; height:13px;"></i> @Model.Faculty
+                    </span>
+                    <span class="chip chip-violet" style="display:inline-flex; align-items:center; gap:5px;">
+                        <i data-lucide="graduation-cap" style="width:13px; height:13px;"></i> @Model.YearOfStudy
+                    </span>
+                    <span class="chip chip-amber" style="display:inline-flex; align-items:center; gap:5px;">
+                        <i data-lucide="coins" style="width:13px; height:13px;"></i> @Model.Points pts
+                    </span>
+                    @if (Model.Points >= 1000)
+                    {
+                        <span class="chip" style="background:#D1FAE5; color:#065F46; display:inline-flex; align-items:center; gap:5px;">
+                            <i data-lucide="shield-check" style="width:13px; height:13px;"></i> Verified Tutor
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="profile-stats-grid">
+            <div class="pstat">
+                <div class="pstat-num" style="color:var(--indigo)">@Model.Points</div>
+                <div class="pstat-label">🪙 Points</div>
+            </div>
+            <div class="pstat">
+                <div class="pstat-num" style="color:var(--emerald)">@(Model.Answers?.Count ?? 0)</div>
+                <div class="pstat-label">💬 Answers</div>
+            </div>
+            <div class="pstat">
+                <div class="pstat-num" style="color:var(--amber)">@(Model.Posts?.Count ?? 0)</div>
+                <div class="pstat-label">❓ Questions</div>
+            </div>
+            <div class="pstat">
+                <div class="pstat-num" style="color:var(--rose)">@(Model.Points / 500 + 1)</div>
+                <div class="pstat-label">⭐ Level</div>
+            </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div style="background:white; border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:28px; display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:180px;">
+                <div style="font-size:13px; font-weight:700; margin-bottom:8px; display:flex; justify-content:space-between;">
+                    <span>Progress to <strong>Verified Tutor</strong></span>
+                    <span>@Model.Points / 1000 pts</span>
+                </div>
+                <div style="height:8px; background:var(--border); border-radius:99px; overflow:hidden;">
+                    <div style="width:@(Math.Min(Model.Points / 10, 100))%; height:100%; background:linear-gradient(90deg, var(--indigo), var(--violet)); border-radius:99px;"></div>
+                </div>
+                <div style="font-size:12px; color:var(--text-2); margin-top:6px;">
+                    @if (Model.Points >= 1000) { <text>Verified Tutor achieved! 🏅</text> }
+                    else { <text>@(1000 - Model.Points) pts to go!</text> }
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchVPTab('questions', this)">
+                <i data-lucide="help-circle" style="width:16px; height:16px;"></i> Questions (@(Model.Posts?.Count ?? 0))
+            </button>
+            <button class="tab-btn" onclick="switchVPTab('answers', this)">
+                <i data-lucide="message-square" style="width:16px; height:16px;"></i> Answers (@(Model.Answers?.Count ?? 0))
+            </button>
+        </div>
+
+        <!-- Questions Tab -->
+        <div id="vp-tab-questions">
+            @if (Model.Posts != null && Model.Posts.Any())
+            {
+                foreach (var post in Model.Posts.OrderByDescending(p => p.CreatedAt).Take(10))
+                {
+                    <a href="@Url.Action("SinglePost", "Dashboard", new { id = post.PostID })" class="activity-card">
+                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+                            @if (post.Category != null)
+                            {
+                                <span class="chip chip-indigo">@post.Category.Name</span>
+                            }
+                            @if (!string.IsNullOrEmpty(post.CourseCode))
+                            {
+                                <span class="chip chip-gray">@post.CourseCode</span>
+                            }
+                            @if (post.Answers != null && post.Answers.Any(a => a.IsAccepted))
+                            {
+                                <span class="chip chip-emerald" style="display:inline-flex;align-items:center;gap:4px;"><i data-lucide="check-circle-2" style="width:11px;height:11px;"></i> Solved</span>
+                            }
+                            <span style="font-size:11px; color:var(--text-2); margin-left:auto;">@post.CreatedAt.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        <div style="font-size:14px; font-weight:700; margin-bottom:8px; color:var(--text);">@post.Title</div>
+                        <div style="display:flex; gap:16px; font-size:12px; color:var(--text-2);">
+                            <span style="display:inline-flex;align-items:center;gap:4px;"><i data-lucide="thumbs-up" style="width:12px;height:12px;"></i> @post.Upvotes</span>
+                            <span style="display:inline-flex;align-items:center;gap:4px;"><i data-lucide="message-square" style="width:12px;height:12px;"></i> @(post.Answers?.Count ?? 0) answers</span>
+                        </div>
+                    </a>
+                }
+            }
+            else
+            {
+                <div style="text-align:center; padding:40px; color:var(--text-2);">
+                    <i data-lucide="inbox" style="width:40px; height:40px; margin-bottom:12px; opacity:.4;"></i>
+                    <p>No questions posted yet.</p>
+                </div>
+            }
+        </div>
+
+        <!-- Answers Tab (hidden) -->
+        <div id="vp-tab-answers" style="display:none;">
+            @if (Model.Answers != null && Model.Answers.Any())
+            {
+                foreach (var answer in Model.Answers.OrderByDescending(a => a.CreatedAt).Take(10))
+                {
+                    <a href="@Url.Action("SinglePost", "Dashboard", new { id = answer.PostID })" class="activity-card">
+                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+                            @if (answer.IsAccepted)
+                            {
+                                <span class="chip chip-emerald" style="display:inline-flex;align-items:center;gap:4px;"><i data-lucide="star" style="width:11px;height:11px;"></i> Best Answer</span>
+                            }
+                            <span style="font-size:11px; color:var(--text-2); margin-left:auto;">@answer.CreatedAt.ToString("MMM dd, yyyy")</span>
+                        </div>
+                        <div style="font-size:13px; color:var(--text); line-height:1.5;">
+                            @(answer.Content?.Length > 120 ? answer.Content.Substring(0, 120) + "…" : answer.Content)
+                        </div>
+                        <div style="display:flex; gap:16px; font-size:12px; color:var(--text-2); margin-top:8px;">
+                            <span style="display:inline-flex;align-items:center;gap:4px;"><i data-lucide="thumbs-up" style="width:12px;height:12px;"></i> @answer.Upvotes upvotes</span>
+                        </div>
+                    </a>
+                }
+            }
+            else
+            {
+                <div style="text-align:center; padding:40px; color:var(--text-2);">
+                    <i data-lucide="inbox" style="width:40px; height:40px; margin-bottom:12px; opacity:.4;"></i>
+                    <p>No answers posted yet.</p>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div style="text-align:center; padding:80px; color:var(--text-2);">
+            <p>User not found.</p>
+        </div>
+    }
+</div>
+
+@section Scripts {
+<script>
+    function switchVPTab(tab, el) {
+        ['questions', 'answers'].forEach(t => {
+            const el = document.getElementById('vp-tab-' + t);
+            if (el) el.style.display = 'none';
+        });
+        const target = document.getElementById('vp-tab-' + tab);
+        if (target) target.style.display = 'block';
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        if (el) el.classList.add('active');
+    }
+</script>
+}

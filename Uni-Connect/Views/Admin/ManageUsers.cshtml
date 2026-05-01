@@ -1,7 +1,7 @@
 @model IEnumerable<Uni_Connect.Models.User>
 @{
     ViewData["Title"] = "Manage Users";
-    Layout = "_DashboardLayout";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
 }
 
 <div class="dashboard-header">
@@ -54,12 +54,20 @@
                             }
                         </td>
                         <td>
-                            <form asp-action="ToggleUserDelete" method="post" style="display:inline;">
-                                <input type="hidden" name="id" value="@user.UserID" />
-                                <button type="submit" class="btn btn-sm @(user.IsDeleted ? "btn-secondary" : "btn-danger")" onclick="return confirm('Are you sure you want to @(user.IsDeleted ? "restore" : "delete") this user?')">
-                                    <i data-lucide="@(user.IsDeleted ? "refresh-cw" : "user-x")"></i>
-                                </button>
-                            </form>
+                            <div style="display:flex; gap:6px;">
+                                <form asp-action="ToggleAdminRole" method="post" style="display:inline;">
+                                    <input type="hidden" name="id" value="@user.UserID" />
+                                    <button type="submit" class="btn btn-sm @(user.Role == "Admin" ? "btn-violet" : "btn-ghost")" title="@(user.Role == "Admin" ? "Demote to Student" : "Promote to Admin")">
+                                        <i data-lucide="shield@(user.Role == "Admin" ? "-off" : "")"></i>
+                                    </button>
+                                </form>
+                                <form asp-action="ToggleUserDelete" method="post" style="display:inline;">
+                                    <input type="hidden" name="id" value="@user.UserID" />
+                                    <button type="submit" class="btn btn-sm @(user.IsDeleted ? "btn-secondary" : "btn-danger")" onclick="return confirm('Are you sure you want to @(user.IsDeleted ? "restore" : "delete") this user?')" title="@(user.IsDeleted ? "Restore User" : "Delete User")">
+                                        <i data-lucide="@(user.IsDeleted ? "refresh-cw" : "user-x")"></i>
+                                    </button>
+                                </form>
+                            </div>
                         </td>
                     </tr>
                 }
@@ -90,4 +98,8 @@
     .text-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
     .btn-danger { background: #E11D48; color: white; border: none; }
     .btn-danger:hover { background: #BE123C; }
+    .btn-violet { background: #7C3AED; color: white; border: none; }
+    .btn-violet:hover { background: #6D28D9; }
+    .btn-ghost { background: transparent; color: var(--text-2); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--bg); color: var(--indigo); border-color: var(--indigo); }
 </style>

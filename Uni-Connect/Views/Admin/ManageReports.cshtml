@@ -1,7 +1,7 @@
 @model IEnumerable<Uni_Connect.Models.Report>
 @{
     ViewData["Title"] = "Manage Reports";
-    Layout = "_DashboardLayout";
+    Layout = "~/Views/Shared/_DashboardLayout.cshtml";
 }
 
 <div class="dashboard-header">
@@ -59,10 +59,22 @@
                         </td>
                         <td>
                             <div style="display:flex; gap:8px;">
-                                <button class="btn btn-sm btn-secondary" title="View Detail"><i data-lucide="eye"></i></button>
+                                @if (report.TargetID.HasValue)
+                                {
+                                    <a asp-controller="Dashboard" asp-action="SinglePost" asp-route-id="@report.TargetID" 
+                                       class="btn btn-sm btn-secondary" title="View Content">
+                                        <i data-lucide="eye"></i>
+                                    </a>
+                                }
                                 @if (!report.IsResolved)
                                 {
-                                    <button class="btn btn-sm btn-primary" title="Mark Resolved"><i data-lucide="check"></i></button>
+                                    <form asp-action="ResolveReport" method="post" style="display:inline;">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@report.ReportID" />
+                                        <button type="submit" class="btn btn-sm btn-primary" title="Mark Resolved">
+                                            <i data-lucide="check"></i>
+                                        </button>
+                                    </form>
                                 }
                             </div>
                         </td>

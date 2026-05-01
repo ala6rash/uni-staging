@@ -1,4 +1,4 @@
-@model Uni_Connect.Models.Post
+﻿@model Uni_Connect.Models.Post
 @{
     ViewData["Title"] = Model?.Title ?? "Post";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
@@ -15,16 +15,42 @@
         <!-- Post Header -->
         <div style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; border: 1.5px solid #E2E8F0;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
-                <img src="https://ui-avatars.com/api/?name=@(Model.User?.Name ?? "User")&background=3D52A0&color=fff&size=40" 
-                     alt="Avatar" style="width: 40px; height: 40px; border-radius: 50%;" />
+                @{
+                    var postAuthorUrl = !string.IsNullOrEmpty(Model.User?.Username)
+                        ? Url.Action("ViewProfile", "Dashboard", new { username = Model.User.Username })
+                        : null;
+                }
+                <a href="@(postAuthorUrl ?? "#")" style="display:contents; text-decoration:none;">
+                    <img src="@(string.IsNullOrEmpty(Model.User?.ProfileImageUrl) ? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(Model.User?.Name ?? "User")}&background=3D52A0&color=fff&size=40" : Model.User.ProfileImageUrl)"
+                         alt="Avatar" style="width: 40px; height: 40px; border-radius: 50%;" />
+                </a>
                 <div>
-                    <strong style="font-size: 14px; color: #0F172A; display: block;">@(Model.User?.Name?.Split(' ').First() ?? "User")</strong>
+                    @if (postAuthorUrl != null)
+                    {
+                        <a href="@postAuthorUrl" style="font-size:14px; font-weight:700; color:#0F172A; display:block; text-decoration:none;" onmouseover="this.style.color='#3D52A0'" onmouseout="this.style.color='#0F172A'">@(Model.User?.Name?.Split(' ').First() ?? "User")</a>
+                    }
+                    else
+                    {
+                        <strong style="font-size: 14px; color: #0F172A; display: block;">@(Model.User?.Name?.Split(' ').First() ?? "User")</strong>
+                    }
                     <span style="font-size: 12px; color: #64748B;">@Model.CreatedAt.ToString("MMM dd, yyyy h:mm tt")</span>
                 </div>
                 @if (Model.Category != null)
                 {
                     <span style="background: #EEF2FF; color: #3D52A0; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-left: auto;">
                         @Model.Category.Name
+                    </span>
+                }
+                @if (!string.IsNullOrEmpty(Model.CourseCode))
+                {
+                    <span style="background: #F1F5F9; color: #475569; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-left: 8px;">
+                        @Model.CourseCode
+                    </span>
+                }
+                @if (Model.IsEndorsed)
+                {
+                    <span class="chip chip-amber" style="background: #FFFBEB; color: #B45309; border: 1px solid #FDE68A; display:inline-flex; align-items:center; gap:4px; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; margin-left: 8px;">
+                        <i data-lucide="award" style="width:14px; height:14px;"></i> ADMIN VERIFIED
                     </span>
                 }
             </div>
@@ -44,14 +70,71 @@
                 </div>
             }
 
-            <!-- Stats -->
-            <div style="display: flex; gap: 24px; font-size: 14px; color: #64748B; font-weight: 600; border-top: 1px solid #E2E8F0; padding-top: 16px;">
-                <span style="display:inline-flex; align-items:center; gap:6px;"><i data-lucide="thumbs-up" style="width:16px; height:16px;"></i> @Model.Upvotes upvotes</span>
+            <!-- Stats & Actions -->
+            <div style="display: flex; gap: 24px; font-size: 14px; color: #64748B; font-weight: 600; border-top: 1px solid #E2E8F0; padding-top: 16px; align-items: center;">
+                <button id="upvotePostBtn" data-post-id="@Model.PostID"
+                        style="background:var(--bg);border:1.5px solid var(--border);border-radius:99px;cursor:pointer;color:var(--text-2);font-weight:700;display:inline-flex;align-items:center;gap:6px;padding:6px 16px;font-size:14px;transition:all .2s;font-family:inherit;"
+                        title="Upvote this question">
+                    <i data-lucide="thumbs-up" style="width:16px;height:16px;"></i>
+                    <span id="postUpvoteCount">@Model.Upvotes</span>
+                </button>
                 <span style="display:inline-flex; align-items:center; gap:6px;"><i data-lucide="message-square" style="width:16px; height:16px;"></i> @(Model.Answers?.Count(a => !a.IsDeleted) ?? 0) answers</span>
                 @if (Model.Answers?.Any(a => a.IsAccepted && !a.IsDeleted) == true)
                 {
                     <span style="color: #065F46; display:inline-flex; align-items:center; gap:6px;"><i data-lucide="check-circle-2" style="width:16px; height:16px;"></i> Solved</span>
                 }
+                
+                @if (User.IsInRole("Admin"))
+                {
+                    <form asp-controller="Admin" asp-action="TogglePostEndorsement" method="post" style="margin-left: 12px;">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.PostID" />
+                        <button type="submit" class="btn btn-sm @(Model.IsEndorsed ? "btn-amber" : "btn-white")" style="display:inline-flex; align-items:center; gap:6px;">
+                            <i data-lucide="@(Model.IsEndorsed ? "star-off" : "award")" style="width:14px; height:14px;"></i>
+                            @(Model.IsEndorsed ? "Remove Verification" : "Verify as Admin")
+                        </button>
+                    </form>
+                }
+
+                @{
+                    var _currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (User.Identity?.IsAuthenticated == true && Model.UserID.ToString() != _currentUserId)
+                    {
+                        <button onclick="openSessionModal(@Model.UserID, @Model.PostID)"
+                                style="background:#3D52A0; color:white; padding:7px 16px; border-radius:8px; border:none; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-size:13px; margin-left:auto;">
+                            <i data-lucide="message-circle" style="width:15px; height:15px;"></i> Request Session
+                        </button>
+                    }
+                }
+
+                @if (Model.UserID.ToString() == User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)
+                {
+                    <form asp-action="DeletePost" method="post" onsubmit="return confirm('Delete this question permanently?')" style="margin-left:auto;">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="postId" value="@Model.PostID" />
+                        <button type="submit" style="background:none; border:none; color:#EF4444; font-size:13px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+                            <i data-lucide="trash-2" style="width:14px; height:14px;"></i> Delete
+                        </button>
+                    </form>
+                }
+            </div>
+
+            <!-- Session Request Modal -->
+            <div id="sessionModal" style="display:none; background:#F8FAFC; border:1.5px solid #C7D2FE; border-radius:10px; padding:16px; margin-top:12px;">
+                <p style="font-size:13px; font-weight:700; color:#0F172A; margin:0 0 10px 0;">Describe what you need help with:</p>
+                <textarea id="sessionDescription" rows="3"
+                    style="width:100%; padding:10px; border-radius:8px; border:1px solid #E2E8F0; font-size:13px; resize:vertical; box-sizing:border-box;"
+                    placeholder="e.g. I need help understanding your approach to this problem..."></textarea>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <button onclick="submitSessionRequest()"
+                            style="background:#3D52A0; color:white; padding:8px 18px; border-radius:8px; border:none; font-weight:600; cursor:pointer; font-size:13px;">
+                        Send Request
+                    </button>
+                    <button onclick="document.getElementById('sessionModal').style.display='none'"
+                            style="background:#F1F5F9; color:#64748B; padding:8px 18px; border-radius:8px; border:none; font-weight:600; cursor:pointer; font-size:13px;">
+                        Cancel
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -67,19 +150,50 @@
                 {
                     <div style="border-left: 4px solid @(answer.IsAccepted ? "#065F46" : "#E2E8F0"); padding: 16px; margin-bottom: 16px; background: @(answer.IsAccepted ? "#ECFDF5" : "#F8FAFC");">
                         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                            <img src="https://ui-avatars.com/api/?name=@(answer.User?.Name ?? "User")&background=7091E6&color=fff&size=32" 
-                                 alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%;" />
+                            @{
+                                var answerAuthorUrl = !string.IsNullOrEmpty(answer.User?.Username)
+                                    ? Url.Action("ViewProfile", "Dashboard", new { username = answer.User.Username })
+                                    : null;
+                            }
+                            <a href="@(answerAuthorUrl ?? "#")" style="display:contents; text-decoration:none;">
+                                <img src="@(string.IsNullOrEmpty(answer.User?.ProfileImageUrl) ? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(answer.User?.Name ?? "User")}&background=7091E6&color=fff&size=32" : answer.User.ProfileImageUrl)"
+                                     alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%;" />
+                            </a>
                             <div style="flex: 1;">
-                                <strong style="font-size: 13px; color: #0F172A;">@(answer.User?.Name?.Split(' ').First() ?? "User")</strong>
+                                @if (answerAuthorUrl != null)
+                                {
+                                    <a href="@answerAuthorUrl" style="font-size:13px; font-weight:700; color:#0F172A; text-decoration:none;" onmouseover="this.style.color='#3D52A0'" onmouseout="this.style.color='#0F172A'">@(answer.User?.Name?.Split(' ').First() ?? "User")</a>
+                                }
+                                else
+                                {
+                                    <strong style="font-size: 13px; color: #0F172A;">@(answer.User?.Name?.Split(' ').First() ?? "User")</strong>
+                                }
                                 <span style="font-size: 12px; color: #64748B; margin-left: 8px;">@answer.CreatedAt.ToString("MMM dd, yyyy")</span>
                                 @if (answer.IsAccepted)
                                 {
                                     <span style="background: #065F46; color: white; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; margin-left: 8px; display:inline-flex; align-items:center; gap:4px;"><i data-lucide="check-circle-2" style="width:12px; height:12px;"></i> Accepted Answer</span>
                                 }
                             </div>
-                            <button class="upvote-btn" data-answer-id="@answer.AnswerID" style="background:none; border:none; cursor:pointer; font-size:13px; color:#64748B; font-weight:600; display:inline-flex; align-items:center; gap:6px;">
-                                <span class="upvote-count" data-upvote-count="@answer.AnswerID"><i data-lucide="thumbs-up" style="width:14px; height:14px; vertical-align:middle;"></i> @answer.Upvotes</span>
+                            <button class="upvote-btn" data-answer-id="@answer.AnswerID" title="Upvote this answer">
+                                <i data-lucide="chevron-up" style="width:18px;height:18px;"></i>
+                                <span class="upvote-count" data-upvote-count="@answer.AnswerID" style="font-size:13px;font-weight:800;">@answer.Upvotes</span>
                             </button>
+                            @if (!answer.IsAccepted && Model.UserID.ToString() == User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)
+                            {
+                                <button class="accept-btn" data-answer-id="@answer.AnswerID" style="background:none; border:1px solid #065F46; color:#065F46; padding:4px 10px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:700; margin-left:12px; display:inline-flex; align-items:center; gap:4px;">
+                                    <i data-lucide="check-circle-2" style="width:12px; height:12px;"></i> Mark as Best
+                                </button>
+                            }
+                            @if (answer.UserID.ToString() == User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)
+                            {
+                                <form asp-action="DeleteAnswer" method="post" onsubmit="return confirm('Delete your answer?')" style="display:inline;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="answerId" value="@answer.AnswerID" />
+                                    <button type="submit" style="background:none; border:none; color:#EF4444; cursor:pointer; margin-left:8px; padding:0;">
+                                        <i data-lucide="trash-2" style="width:14px; height:14px;"></i>
+                                    </button>
+                                </form>
+                            }
                         </div>
                         <p style="font-size: 14px; color: #1E293B; line-height: 1.6; margin: 0; white-space: pre-wrap;">@answer.Content</p>
                         
@@ -108,24 +222,44 @@
         <!-- Answer submission form -->
         @if (User.Identity.IsAuthenticated)
         {
-            <div style="margin-top:20px; background:white; border-radius:12px; padding:20px; border:1.5px solid #E2E8F0; margin-top:16px;">
-                <h3 style="margin-top:0;">Your Answer</h3>
-                <form asp-action="PostAnswer" method="post" enctype="multipart/form-data" style="margin-top:8px;">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="postId" value="@Model.PostID" />
-                    <textarea name="content" rows="5" style="width:100%; padding:12px; border-radius:8px; border:1px solid #E6EEF8; margin-bottom:12px;" placeholder="Write your answer here..." required></textarea>
-                    
-                    <div style="margin-bottom:16px;">
-                        <label style="display:block; font-size:13px; font-weight:700; color:#0F172A; margin-bottom:8px;">Attach an image (optional)</label>
-                        <input type="file" name="ImageFile" accept="image/*" style="font-size:13px; color:#64748B;" />
-                    </div>
+            <div style="display: flex; gap: 16px; margin-top: 20px;">
+                <div style="flex: 2; background:white; border-radius:12px; padding:20px; border:1.5px solid #E2E8F0;">
+                    <h3 style="margin-top:0;">Your Answer</h3>
+                    <form asp-action="PostAnswer" method="post" enctype="multipart/form-data" style="margin-top:8px;">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="postId" value="@Model.PostID" />
+                        <textarea name="content" rows="5" class="form-input form-textarea" style="margin-bottom:12px;" placeholder="Write your answer here..." required></textarea>
+                        
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block; font-size:13px; font-weight:700; color:#0F172A; margin-bottom:8px;">Attach an image (optional)</label>
+                            <input type="file" name="ImageFile" accept="image/*" style="font-size:13px; color:#64748B;" />
+                        </div>
 
-                    <div style="text-align:right;">
-                        <button type="submit" class="btn btn-primary" style="background:#3D52A0; color:#fff; padding:10px 20px; border-radius:8px; border:none; font-weight:600; display:inline-flex; align-items:center; gap:8px;">
-                            <i data-lucide="send" style="width:18px; height:18px;"></i> Post Answer
-                        </button>
+                        <div style="text-align:right;">
+                            <button type="submit" class="btn btn-primary" style="background:#3D52A0; color:#fff; padding:10px 20px; border-radius:8px; border:none; font-weight:600; display:inline-flex; align-items:center; gap:8px;">
+                                <i data-lucide="send" style="width:18px; height:18px;"></i> Post Answer
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                @if (Model.UserID.ToString() != User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value)
+                {
+                    <div style="flex: 1; background: linear-gradient(135deg, #3D52A0, #7091E6); border-radius: 12px; padding: 20px; color: white; height: fit-content;">
+                        <h3 style="margin-top:0; font-size: 18px;">Peer Tutoring</h3>
+                        <p style="font-size: 13px; opacity: 0.9; line-height: 1.5; margin-bottom: 20px;">
+                            Know the answer? Offer to explain it privately in a one-on-one chat with this student.
+                        </p>
+                        <form asp-action="RequestTutoring" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="postId" value="@Model.PostID" />
+                            <textarea name="description" rows="3" style="width:100%; padding:10px; border-radius:8px; border:none; margin-bottom:12px; font-size: 12px; color: #333;" placeholder="Briefly describe your approach or what you can explain..." required></textarea>
+                            <button type="submit" class="btn btn-white btn-sm" style="width: 100%; font-weight: 700;">
+                                <i data-lucide="message-circle" style="width:14px; height:14px;"></i> Offer to Tutor Privately
+                            </button>
+                        </form>
                     </div>
-                </form>
+                }
             </div>
         }
         else
@@ -150,6 +284,7 @@
                 document.querySelectorAll('.upvote-btn').forEach(function(btn) {
                     btn.addEventListener('click', async function (e) {
                         e.preventDefault();
+                        if (this.classList.contains('voted')) return;
                         var id = this.dataset.answerId;
                         var token = getToken();
                         try {
@@ -161,21 +296,124 @@
                                 },
                                 body: 'answerId=' + encodeURIComponent(id)
                             });
-                            if (!resp.ok) throw new Error('Network response was not ok');
-                            var data = await resp.json();
-                            if (display) {
-                                // Find icon inside or just update text
-                                const iconHtml = '<i data-lucide="thumbs-up" style="width:14px; height:14px; vertical-align:middle;"></i> ';
-                                display.innerHTML = iconHtml + data.upvotes;
-                                lucide.createIcons();
+                            if (resp.ok) {
+                                var data = await resp.json();
+                                var display = document.querySelector('.upvote-count[data-upvote-count="' + id + '"]');
+                                if (display) display.textContent = data.upvotes;
+                                this.classList.add('voted');
+                                if (typeof updateStats === 'function') updateStats();
+                            } else if (resp.status === 404) {
+                                if (typeof showToast === 'function') showToast('Already upvoted or cannot upvote your own answer', 'warn');
+                                this.classList.add('voted');
                             }
                         } catch (err) {
                             console.error(err);
-                            alert('Failed to upvote. Please try again.');
+                        }
+                    });
+                });
+
+                // Post Upvote
+                document.getElementById('upvotePostBtn')?.addEventListener('click', async function(e) {
+                    var id = this.dataset.postId;
+                    var token = getToken();
+                    try {
+                        var resp = await fetch('@Url.Action("UpvotePost","Dashboard")', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'RequestVerificationToken': token
+                            },
+                            body: 'postId=' + encodeURIComponent(id)
+                        });
+                        if (!resp.ok) {
+                            if (typeof showToast === 'function') showToast('Already upvoted this question', 'warn');
+                            this.style.background = 'var(--amber-light)';
+                            this.style.borderColor = '#FDE68A';
+                            this.style.color = 'var(--amber-dark)';
+                            this.disabled = true;
+                            return;
+                        }
+                        var data = await resp.json();
+                        var display = document.getElementById('postUpvoteCount');
+                        if (display) display.textContent = data.upvotes;
+                        this.style.background = 'var(--amber-light)';
+                        this.style.borderColor = '#FDE68A';
+                        this.style.color = 'var(--amber-dark)';
+                        this.disabled = true;
+                        if (typeof showToast === 'function') showToast('Upvoted! +1');
+                        if (typeof updateStats === 'function') updateStats();
+                    } catch (err) {
+                        console.error(err);
+                    }
+                });
+                document.querySelectorAll('.accept-btn').forEach(function(btn) {
+                    btn.addEventListener('click', async function (e) {
+                        if (!confirm('Mark this as the best answer? This will award points and mark your question as solved.')) return;
+                        
+                        e.preventDefault();
+                        var id = this.dataset.answerId;
+                        var token = getToken();
+                        try {
+                            var resp = await fetch('@Url.Action("AcceptAnswer","Dashboard")', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                    'RequestVerificationToken': token
+                                },
+                                body: 'answerId=' + encodeURIComponent(id)
+                            });
+                            if (!resp.ok) {
+                                var msg = await resp.text();
+                                if (typeof showToast === 'function') showToast(msg || 'Failed to accept answer.', 'error');
+                                return;
+                            }
+                            // Auto-upvote the accepted answer
+                            try {
+                                await fetch('@Url.Action("UpvoteAnswer","Dashboard")', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'RequestVerificationToken': token },
+                                    body: 'answerId=' + encodeURIComponent(id)
+                                });
+                            } catch (e2) { /* upvote may already exist, ignore */ }
+                            location.reload();
+                        } catch (err) {
+                            console.error(err);
+                            if (typeof showToast === 'function') showToast('Failed to accept answer. Please try again.', 'error');
                         }
                     });
                 });
             })();
+
+            // ── Session Request ───────────────────────────────────
+            let _recipientId, _postId;
+
+            function openSessionModal(recipientId, postId) {
+                _recipientId = recipientId;
+                _postId = postId;
+                document.getElementById('sessionModal').style.display = 'block';
+            }
+
+            async function submitSessionRequest() {
+                const description = document.getElementById('sessionDescription').value.trim();
+                if (!description) { alert('Please describe what you need help with.'); return; }
+                try {
+                    const res = await fetch('/Session/SendRequest', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `recipientId=${_recipientId}&postId=${_postId}&description=${encodeURIComponent(description)}`
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        alert('✅ Session request sent! The post author will see it in their Incoming Requests.');
+                        document.getElementById('sessionModal').style.display = 'none';
+                        document.getElementById('sessionDescription').value = '';
+                    } else {
+                        alert('❌ ' + (data.message || 'Could not send request.'));
+                    }
+                } catch (err) {
+                    alert('Failed to send session request. Please try again.');
+                }
+            }
         </script>
     }
     else

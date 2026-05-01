@@ -166,7 +166,7 @@
     <div class="rank-banner">
         <div class="rank-banner-icon"><i data-lucide="award" style="width:40px; height:40px; color:var(--indigo);"></i></div>
         <div class="rank-banner-content">
-            <div class="rank-banner-title">You are ranked #6 overall!</div>
+            <div class="rank-banner-title">You are ranked #@(ViewBag.UserRank ?? "-") overall!</div>
             <div class="rank-banner-text">Keep helping classmates to climb higher on the leaderboard.</div>
         </div>
         <div class="rank-banner-points">
@@ -186,10 +186,10 @@
                 if (top3.Count >= 2)
                 {
                     var u2 = top3[1];
-                    <div class="podium-card podium-2nd">
-                        <div class="podium-medal">🥈</div>
-                        <div class="av av-lg" style="margin: 0 auto 14px; border: 3px solid #C0C0C0;">
-                            <img src="https://ui-avatars.com/api/?name=@u2.Name&background=3D52A0&color=fff&size=60" alt="@u2.Name" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
+                    <div class="podium-card podium-2nd glass-card">
+                        <div class="icon-premium" style="background:#F1F5F9; margin: 0 auto 14px;"><i data-lucide="medal" style="color:#94A3B8"></i></div>
+                        <div class="av-premium av-lg" style="margin: 0 auto 14px; background:#C0C0C0;">
+                            <img src="@(string.IsNullOrEmpty(u2.ProfileImageUrl) ? $"https://ui-avatars.com/api/?name={u2.Name}&background=3D52A0&color=fff&size=60" : u2.ProfileImageUrl)" alt="@u2.Name" style="width: 100%; height: 100%;" />
                         </div>
                         <div style="font-weight: 800; font-size: 15px;">@u2.Name</div>
                         <div style="font-size: 12px; color: var(--text-2); font-weight: 600; margin-bottom: 10px;">@u2.Faculty</div>
@@ -201,14 +201,14 @@
                 if (top3.Count >= 1)
                 {
                     var u1 = top3[0];
-                    <div class="podium-card podium-1st">
-                        <div class="podium-medal">🥇</div>
-                        <div class="av av-xl" style="margin: 0 auto 14px; border: 4px solid var(--amber);">
-                            <img src="https://ui-avatars.com/api/?name=@u1.Name&background=3D52A0&color=fff&size=80" alt="@u1.Name" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
+                    <div class="podium-card podium-1st glass-card">
+                        <div class="icon-premium glow-amber" style="background:#FEF3C7; margin: 0 auto 14px;"><i data-lucide="award" style="color:var(--amber)"></i></div>
+                        <div class="av-premium av-xl" style="margin: 0 auto 14px;">
+                            <img src="@(string.IsNullOrEmpty(u1.ProfileImageUrl) ? $"https://ui-avatars.com/api/?name={u1.Name}&background=3D52A0&color=fff&size=80" : u1.ProfileImageUrl)" alt="@u1.Name" style="width: 100%; height: 100%;" />
                         </div>
                         <div style="font-weight: 900; font-size: 16px;">@u1.Name</div>
                         <span class="chip chip-emerald" style="display: inline-block; margin-bottom: 10px;">Top Contributor</span>
-                        <div style="font-size: 24px; font-weight: 900; color: var(--amber);">@u1.Points pts</div>
+                        <div style="font-size: 24px; font-weight: 900;" class="text-gradient">@u1.Points pts</div>
                     </div>
                 }
 
@@ -216,10 +216,10 @@
                 if (top3.Count >= 3)
                 {
                     var u3 = top3[2];
-                    <div class="podium-card podium-3rd">
-                        <div class="podium-medal">🥉</div>
-                        <div class="av av-lg" style="margin: 0 auto 14px; border: 3px solid #CD7F32;">
-                            <img src="https://ui-avatars.com/api/?name=@u3.Name&background=3D52A0&color=fff&size=60" alt="@u3.Name" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
+                    <div class="podium-card podium-3rd glass-card">
+                        <div class="icon-premium" style="background:#FFF7ED; margin: 0 auto 14px;"><i data-lucide="medal" style="color:#B45309"></i></div>
+                        <div class="av-premium av-lg" style="margin: 0 auto 14px; background:#CD7F32;">
+                            <img src="@(string.IsNullOrEmpty(u3.ProfileImageUrl) ? $"https://ui-avatars.com/api/?name={u3.Name}&background=3D52A0&color=fff&size=60" : u3.ProfileImageUrl)" alt="@u3.Name" style="width: 100%; height: 100%;" />
                         </div>
                         <div style="font-weight: 800; font-size: 15px;">@u3.Name</div>
                         <div style="font-size: 12px; color: var(--text-2); font-weight: 600; margin-bottom: 10px;">@u3.Faculty</div>
@@ -238,10 +238,10 @@
             foreach (var u in leaderboard)
             {
                 var isCurrent = (u.UserID == Model.UserID);
-                <div class="rank-row @(isCurrent ? "highlight-row" : "")" onclick="window.location.href='@Url.Action("ViewProfile", "Dashboard", new { username = u.Username })'">
+                <div class="rank-row @(isCurrent ? "highlight-row" : "") glass-card" onclick="window.location.href='@Url.Action("ViewProfile", "Dashboard", new { username = u.Username })'">
                     <div class="rank-num">#@rankNum</div>
                     <div class="rank-info">
-                        <img src="https://ui-avatars.com/api/?name=@u.Name&background=3D52A0&color=fff&size=36" class="rank-avatar" />
+                        <div class="av-premium av-sm" style="width:36px; height:36px; padding:2px;"><img src="@(string.IsNullOrEmpty(u.ProfileImageUrl) ? $"https://ui-avatars.com/api/?name={u.Name}&background=3D52A0&color=fff&size=36" : u.ProfileImageUrl)" style="width:100%; height:100%;" /></div>
                         <div>
                             <div class="rank-name">@u.Name @(isCurrent ? "(YOU)" : "")</div>
                             <div class="rank-faculty">@u.Faculty</div>

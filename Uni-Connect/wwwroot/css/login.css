@@ -2057,6 +2057,50 @@ input, select, textarea {
 }
 
 /* ============================================================
+   VALIDATION & FORM ALERTS
+   ============================================================ */
+
+.validation-error-box {
+    background: #FFF1F2;
+    border: 1px solid #FECDD3;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #BE123C;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.validation-error-box:empty {
+    display: none;
+}
+
+.field-validation-error {
+    display: block;
+    font-size: 12px;
+    color: var(--rose);
+    font-weight: 600;
+    margin-top: 5px;
+}
+
+.field-validation-valid {
+    display: none;
+}
+
+.success-message-box {
+    background: #ECFDF5;
+    border: 1px solid #A7F3D0;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #065F46;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+/* ============================================================
    Forget Password Page
    ============================================================ */
 

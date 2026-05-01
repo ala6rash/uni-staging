@@ -20,6 +20,6 @@ namespace Uni_Connect.Models
         // Navigation
         public Post Post { get; set; }
         public User User { get; set; }
-
+        public ICollection<AnswerUpvote> AnswerUpvotes { get; set; }
     }
 }

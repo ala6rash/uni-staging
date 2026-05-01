@@ -1,4 +1,4 @@
-@model Uni_Connect.Models.User
+﻿@model Uni_Connect.Models.User
 @{
     ViewData["Title"] = "Community Dashboard — UniConnect";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
@@ -21,18 +21,24 @@
         .tab-btn:hover { color: var(--indigo); }
         .tab-btn.active { color: var(--indigo); font-weight: 700; border-bottom-color: var(--indigo); }
         
-        .questions-list { display: flex; flex-direction: column; gap: 16px; }
+        .questions-list { 
+            display: flex; flex-direction: column; gap: 24px; 
+            position: relative; padding-bottom: 40px;
+        }
         
         .q-card-enhanced {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--radius); padding: 20px;
-            cursor: pointer; transition: all .2s ease;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--border);
+            border-radius: 16px; padding: 24px;
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: block; text-decoration: none;
-            color: inherit;
+            color: inherit; position: relative; z-index: 1;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
         }
         .q-card-enhanced:hover {
-            box-shadow: var(--shadow-md); transform: translateY(-2px);
-            border-color: var(--indigo);
+            box-shadow: var(--shadow-lg); transform: translateY(-4px) scale(1.01);
+            border-color: var(--indigo); background: #fff;
         }
         
         .q-header {
@@ -88,14 +94,44 @@
     </div>
 
     <!-- Tabs (Not implemented yet, placeholder) -->
+    <!-- Tabs -->
     <div class="tab-container">
-        <button class="tab-btn active"><i data-lucide="layout-list"></i> All Questions</button>
-        <button class="tab-btn"><i data-lucide="user-plus"></i> My Faculty</button>
-        <button class="tab-btn"><i data-lucide="flame"></i> Trending</button>
+        <a href="@Url.Action("Dashboard", new { filter = "All", search = ViewBag.SearchQuery })" class="tab-btn @(ViewBag.ActiveFilter == "All" ? "active" : "")"><i data-lucide="layers"></i> All Questions</a>
+        <a href="@Url.Action("Dashboard", new { filter = "Faculty", search = ViewBag.SearchQuery })" class="tab-btn @(ViewBag.ActiveFilter == "Faculty" ? "active" : "")"><i data-lucide="user-round-plus"></i> My Faculty</a>
+        <a href="@Url.Action("Dashboard", new { filter = "Trending", search = ViewBag.SearchQuery })" class="tab-btn @(ViewBag.ActiveFilter == "Trending" ? "active" : "")"><i data-lucide="flame"></i> Trending</a>
     </div>
 
-    <!-- Questions Feed -->
-    <div class="questions-list">
+    @if (!string.IsNullOrEmpty(ViewBag.SearchQuery))
+    {
+        <div style="margin-bottom: 20px; color: var(--text-2); font-size: 14px; display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="search" style="width:16px; height:16px;"></i>
+            Showing results for "@ViewBag.SearchQuery" 
+            <a href="@Url.Action("Dashboard", new { filter = ViewBag.ActiveFilter })" style="color: var(--rose); margin-left: 8px; text-decoration: none; font-weight: 600;">Clear search</a>
+        </div>
+    }
+
+    <!-- Main Content Grid -->
+    <!-- Faculty Filter Pills -->
+    <div style="margin-bottom: 24px; display: flex; gap: 10px; overflow-x: auto; padding: 4px 0; scrollbar-width: none;" class="hide-scrollbar">
+        @{
+            var currentFaculty = Context.Request.Query["filter"].ToString() == "Faculty" ? Context.Request.Query["faculty"].ToString() : "All";
+            var faculties = new[] { "All", "Faculty of Information Technology", "Faculty of Engineering", "Faculty of Business", "Faculty of Law", "Faculty of Pharmacy" };
+            foreach(var fac in faculties)
+            {
+                var isActive = (fac == "All" && currentFaculty == "All") || (fac == currentFaculty);
+                <a href="@(fac == "All" ? Url.Action("Dashboard") : Url.Action("Dashboard", new { filter = "Faculty", faculty = fac }))" 
+                   class="chip @(isActive ? "chip-indigo" : "chip-white")" 
+                   style="white-space: nowrap; padding: 8px 18px; cursor: pointer; text-decoration: none; font-weight: 700; font-size: 13px; transition: all 0.2s; border: 1.5px solid @(isActive ? "var(--indigo)" : "var(--border)");">
+                    @fac.Replace("Faculty of ", "")
+                </a>
+            }
+        }
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 300px; gap: 32px; align-items: flex-start;">
+        <!-- Questions Feed -->
+        <div class="questions-list">
+            <div class="timeline-line"></div>
         @{
             var posts = ViewBag.Posts as List<Post>;
             if (posts != null && posts.Count > 0)
@@ -103,9 +139,10 @@
                 foreach (var post in posts)
                 {
                     <div class="q-card-enhanced" onclick="window.location.href='@Url.Action("SinglePost", new { id = post.PostID })'">
+                        <div class="timeline-dot"></div>
                         <!-- Header with author info -->
                         <div class="q-header">
-                               <img src='https://ui-avatars.com/api/?name=@(post.User?.Name ?? "User")&amp;background=3D52A0&amp;color=fff' 
+                               <img src='@(string.IsNullOrEmpty(post.User?.ProfileImageUrl) ? $"https://ui-avatars.com/api/?name={post.User?.Name ?? "User"}&background=3D52A0&color=fff" : post.User.ProfileImageUrl)' 
                                    alt="Avatar" class="q-avatar" />
                             <div>
                                 <div class="q-meta">
@@ -119,6 +156,12 @@
                                         <span class="q-author">@authorName</span>
                                     }
                                     <span class="q-date">@post.CreatedAt.ToString("MMM dd, yyyy")</span>
+                                    @if (post.IsEndorsed)
+                                    {
+                                        <span class="chip chip-amber" style="background: #FFFBEB; color: #B45309; border: 1px solid #FDE68A; font-size: 9px; padding: 2px 8px;">
+                                            <i data-lucide="award" style="width:10px; height:10px;"></i> VERIFIED
+                                        </span>
+                                    }
                                 </div>
                             </div>
                         </div>
@@ -153,6 +196,10 @@
                             {
                                 <span class="chip chip-indigo">@post.Category.Name</span>
                             }
+                            @if (!string.IsNullOrEmpty(post.CourseCode))
+                            {
+                                <span class="chip chip-gray">@post.CourseCode</span>
+                            }
                             @if (post.Answers?.Any(a => a.IsAccepted && !a.IsDeleted) == true)
                             {
                                 <span class="chip chip-emerald" style="display:inline-flex; align-items:center; gap:4px;"><i data-lucide="check-circle-2" style="width:12px; height:12px;"></i> Solved</span>
@@ -161,9 +208,14 @@
 
                         <!-- Stats -->
                         <div class="q-stats">
-                            <span style="display:inline-flex; align-items:center; gap:4px;"><i data-lucide="thumbs-up" style="width:14px; height:14px;"></i> @post.Upvotes</span>
+                            <button class="feed-upvote-btn" data-post-id="@post.PostID"
+                                    onclick="event.stopPropagation(); feedUpvote(@post.PostID, this);"
+                                    style="background:none;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--text-2);padding:0;font-weight:600;transition:color .15s;">
+                                <i data-lucide="thumbs-up" style="width:14px; height:14px;"></i>
+                                <span id="feed-upvote-@(post.PostID)">@post.Upvotes</span>
+                            </button>
                             <span style="display:inline-flex; align-items:center; gap:4px;"><i data-lucide="message-square" style="width:14px; height:14px;"></i> @(post.Answers?.Count(a => !a.IsDeleted) ?? 0)</span>
-                            <span style="display:inline-flex; align-items:center; gap:4px;"><i data-lucide="eye" style="width:14px; height:14px;"></i> 0</span>
+                            <span style="display:inline-flex; align-items:center; gap:4px;"><i data-lucide="eye" style="width:14px; height:14px;"></i> @post.ViewsCount</span>
                         </div>
                     </div>
                 }
@@ -171,12 +223,97 @@
             else
             {
                 <div class="empty-state">
-                    <div class="empty-icon"><i data-lucide="clipboard-list" style="width:48px; height:48px;"></i></div>
+                    <div class="empty-icon"><i data-lucide="file-question" style="width:48px; height:48px;"></i></div>
                     <h3 class="empty-title">No questions yet</h3>
                     <p class="empty-text">Be the first to ask a question in your community!</p>
-                    <a asp-action="CreatePost" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="pen-tool" style="width:18px; height:18px;"></i> Ask a Question</a>
+                    <a asp-action="CreatePost" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:8px;"><i data-lucide="pencil-line" style="width:18px; height:18px;"></i> Ask a Question</a>
                 </div>
             }
         }
+        </div>
+
+        <aside style="display: flex; flex-direction: column; gap: 24px; position: sticky; top: 100px;">
+            <div class="glass-card p-4">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                    <h4 style="font-size: 14px; font-weight: 800; text-transform: uppercase; color: var(--indigo); letter-spacing: 0.05em;">Trending Topics</h4>
+                    <i data-lucide="trending-up" style="width: 16px; height: 16px; color: var(--indigo);"></i>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    @{
+                        var trendingPosts = (ViewBag.Posts as List<Post>)?.OrderByDescending(p => p.ViewsCount + p.Upvotes).Take(5).ToList();
+                        if (trendingPosts != null && trendingPosts.Any())
+                        {
+                            int rank = 1;
+                            foreach(var tp in trendingPosts)
+                            {
+                                <a href="@Url.Action("SinglePost", new { id = tp.PostID })" class="trending-item">
+                                    <span class="trending-rank">#@rank</span>
+                                    <div class="trending-info">
+                                        <div class="trending-title">@tp.Title</div>
+                                        <div class="trending-meta">@tp.ViewsCount views • @(tp.Answers?.Count ?? 0) answers</div>
+                                    </div>
+                                </a>
+                                rank++;
+                            }
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="glass-card p-4" style="background: linear-gradient(135deg, var(--indigo), var(--violet)); color: #fff; border: none;">
+                <h4 style="font-size: 13px; font-weight: 700; opacity: 0.9; margin-bottom: 12px;">COMMUNITY STATS</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div>
+                        <div style="font-size: 20px; font-weight: 800;">@(ViewBag.Posts?.Count ?? 0)</div>
+                        <div style="font-size: 11px; opacity: 0.8;">Active Questions</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 20px; font-weight: 800;">@Model.Points</div>
+                        <div style="font-size: 11px; opacity: 0.8;">Your Points</div>
+                    </div>
+                </div>
+                <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <a asp-action="Leaderboard" style="font-size: 12px; font-weight: 700; color: #fff; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+                        View Leaderboard <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i>
+                    </a>
+                </div>
+            </div>
+        </aside>
     </div>
 </div>
+
+<!-- Hidden CSRF form for AJAX upvote -->
+<form id="dashCsrf" style="display:none;">@Html.AntiForgeryToken()</form>
+
+@section Scripts {
+<script>
+    async function feedUpvote(postId, btn) {
+        const token = document.querySelector('#dashCsrf input[name="__RequestVerificationToken"]')?.value;
+        try {
+            const resp = await fetch('@Url.Action("UpvotePost","Dashboard")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'RequestVerificationToken': token
+                },
+                body: 'postId=' + encodeURIComponent(postId)
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                const count = document.getElementById('feed-upvote-' + postId);
+                if (count) count.textContent = data.upvotes;
+                btn.style.color = 'var(--indigo)';
+                btn.disabled = true;
+                if (typeof showToast === 'function') showToast('Upvoted! +1', 'success');
+            } else if (resp.status === 400) {
+                btn.style.color = 'var(--indigo)';
+                btn.disabled = true;
+                if (typeof showToast === 'function') showToast('Already upvoted', 'warn');
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+</script>
+}

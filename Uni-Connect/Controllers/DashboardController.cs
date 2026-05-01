@@ -24,7 +24,7 @@ namespace Uni_Connect.Controllers
             _pointService = pointService;
             _postService = postService;
         }
-        public async Task<IActionResult> Dashboard()
+        public async Task<IActionResult> Dashboard(string search, string filter)
         {
             var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdStr)) return RedirectToAction("Login_Page", "Login");
@@ -38,55 +38,85 @@ namespace Uni_Connect.Controllers
             if (user == null) return RedirectToAction("Login_Page", "Login");
 
             // Fetch all posts with related data
-            var posts = await _context.Posts
+            IQueryable<Post> query = _context.Posts
                 .Where(p => !p.IsDeleted)
                 .Include(p => p.User)
                 .Include(p => p.Category)
-                .Include(p => p.Answers)
-                .OrderByDescending(p => p.CreatedAt)
-                .ToListAsync();
+                .Include(p => p.PostTags).ThenInclude(pt => pt.Tag)
+                .Include(p => p.Answers.Where(a => !a.IsDeleted));
+
+            if (!string.IsNullOrEmpty(search))
+            {
+                var lowerSearch = search.ToLower();
+                query = query.Where(p => 
+                    p.Title.ToLower().Contains(lowerSearch) || 
+                    p.Content.ToLower().Contains(lowerSearch) ||
+                    (p.CourseCode != null && p.CourseCode.ToLower().Contains(lowerSearch)) ||
+                    p.PostTags.Any(pt => pt.Tag.Name.ToLower().Contains(lowerSearch))
+                );
+            }
+
+            if (filter == "Faculty")
+            {
+                query = query.Where(p => p.User.Faculty == user.Faculty);
+            }
+            else if (filter == "Trending")
+            {
+                query = query.Where(p => p.CreatedAt >= DateTime.UtcNow.AddDays(-7)).OrderByDescending(p => p.ViewsCount + p.Upvotes);
+            }
+
+            if (filter != "Trending")
+            {
+                query = query.OrderByDescending(p => p.CreatedAt);
+            }
+
+            var posts = await query.ToListAsync();
 
             ViewBag.Posts = posts;
+            ViewBag.SearchQuery = search;
+            ViewBag.ActiveFilter = filter ?? "All";
             return View(user);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpvotePost(int postId)
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return Unauthorized();
+
+            var success = await _postService.UpvotePost(postId, user.UserID);
+            if (!success) return BadRequest("Already upvoted or invalid post.");
+
+            var post = await _context.Posts.FindAsync(postId);
+            return Json(new { upvotes = post?.Upvotes ?? 0 });
         }
         public async Task<IActionResult> Profile()
         {
             var user = await GetCurrentUser();
             if (user == null) return RedirectToAction("Login_Page", "Login");
             
-            // Ensure navigation properties are loaded
+            // Ensure navigation properties are loaded with counts
             await _context.Entry(user)
                 .Collection(u => u.Posts)
+                .Query()
+                .Where(p => !p.IsDeleted)
+                .Include(p => p.Category)
                 .LoadAsync();
+
             await _context.Entry(user)
                 .Collection(u => u.Answers)
+                .Query()
+                .Where(a => !a.IsDeleted)
+                .Include(a => a.Post)
                 .LoadAsync();
-            
-            return View(user);
-        }
 
-        // View another user's public profile by username
-        public async Task<IActionResult> ViewProfile(string username)
-        {
-            if (string.IsNullOrWhiteSpace(username)) return RedirectToAction("Dashboard");
+            // Fetch session counts
+            ViewBag.SessionCount = await _context.PrivateSessions
+                .CountAsync(s => (s.StudentID == user.UserID || s.HelperID == user.UserID) && !s.IsDeleted);
 
-            var userProfile = await _context.Users
-                .Include(u => u.Posts)
-                .Include(u => u.Answers)
-                .FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower() && !u.IsDeleted);
-
-            if (userProfile == null) return RedirectToAction("Dashboard");
-
-            return View("Profile", userProfile);
-        }
-
-        // Settings page (GET)
-        public async Task<IActionResult> Settings()
-        {
-            var user = await GetCurrentUser();
-            if (user == null) return RedirectToAction("Login_Page", "Login");
-
-            var model = new Uni_Connect.ViewModels.SettingsViewModel
+            // Also pass the SettingsViewModel in case we are on the settings tab
+            ViewBag.SettingsModel = new Uni_Connect.ViewModels.SettingsViewModel
             {
                 UserID = user.UserID,
                 Name = user.Name,
@@ -95,8 +125,64 @@ namespace Uni_Connect.Controllers
                 YearOfStudy = user.YearOfStudy,
                 ProfileImageUrl = user.ProfileImageUrl
             };
+            
+            return View(user);
+        }
 
-            return View(model);
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RedeemReward(string venue, string discount, int cost)
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return Unauthorized();
+
+            if (user.Points < cost)
+            {
+                return Json(new { success = false, message = "Insufficient points." });
+            }
+
+            // Generate a random coupon code
+            string couponCode = "PU-" + Guid.NewGuid().ToString().Substring(0, 8).ToUpper();
+
+            // Deduct points
+            await _pointService.DeductPoints(user.UserID, cost, "Reward Redeemed", $"{venue}: {discount} (Code: {couponCode})", "🎁");
+
+            // Reload updated balance from DB (in-memory user.Points is stale after deduction)
+            var updatedPoints = await _pointService.GetUserPoints(user.UserID);
+            return Json(new { success = true, pointsBalance = updatedPoints, couponCode = couponCode });
+        }
+
+        // View another user's public profile by username
+        public async Task<IActionResult> ViewProfile(string username)
+        {
+            if (string.IsNullOrWhiteSpace(username)) return RedirectToAction("Dashboard");
+
+            var userProfile = await _context.Users
+                .FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower() && !u.IsDeleted);
+
+            if (userProfile == null) return RedirectToAction("Dashboard");
+
+            // Load only non-deleted content
+            await _context.Entry(userProfile)
+                .Collection(u => u.Posts)
+                .Query()
+                .Where(p => !p.IsDeleted)
+                .Include(p => p.Category)
+                .LoadAsync();
+
+            await _context.Entry(userProfile)
+                .Collection(u => u.Answers)
+                .Query()
+                .Where(a => !a.IsDeleted)
+                .LoadAsync();
+            
+            return View(userProfile);
+        }
+
+        // Settings page (GET)
+        public async Task<IActionResult> Settings()
+        {
+            return RedirectToAction("Profile");
         }
 
         [HttpPost]
@@ -118,19 +204,19 @@ namespace Uni_Connect.Controllers
                 if (string.IsNullOrWhiteSpace(model.CurrentPassword))
                 {
                     TempData["ErrorMessage"] = "Current password is required to change password.";
-                    return View(model);
+                    return RedirectToAction("Profile");
                 }
 
                 if (model.NewPassword != model.ConfirmPassword)
                 {
                     TempData["ErrorMessage"] = "New password and confirmation do not match.";
-                    return View(model);
+                    return RedirectToAction("Profile");
                 }
 
                 if (model.NewPassword.Length < 6)
                 {
                     TempData["ErrorMessage"] = "New password must be at least 6 characters.";
-                    return View(model);
+                    return RedirectToAction("Profile");
                 }
 
                 // Verify current password (using BCrypt)
@@ -138,7 +224,7 @@ namespace Uni_Connect.Controllers
                 if (!isValid)
                 {
                     TempData["ErrorMessage"] = "Current password is incorrect.";
-                    return View(model);
+                    return RedirectToAction("Profile");
                 }
 
                 // Update password
@@ -154,7 +240,7 @@ namespace Uni_Connect.Controllers
                 TempData["SuccessMessage"] = "Profile settings updated successfully.";
             }
 
-            return RedirectToAction("Settings");
+            return RedirectToAction("Profile");
         }
         public async Task<IActionResult> Notifications()
         {
@@ -181,24 +267,56 @@ namespace Uni_Connect.Controllers
                 query = query.Where(u => u.Faculty == faculty);
             }
 
-            if (!string.IsNullOrEmpty(period))
+            List<User> leaderboardUsers;
+
+            if (!string.IsNullOrEmpty(period) && (period == "This Month" || period == "This Week"))
             {
-                if (period == "This Month")
-                {
-                    var since = DateTime.UtcNow.AddMonths(-1);
-                    query = query.Where(u => u.CreatedAt >= since);
-                }
-                else if (period == "This Week")
-                {
-                    var since = DateTime.UtcNow.AddDays(-7);
-                    query = query.Where(u => u.CreatedAt >= since);
-                }
+                // Rank by points EARNED in the selected period using PointsTransactions
+                DateTime since = period == "This Month"
+                    ? DateTime.UtcNow.AddMonths(-1)
+                    : DateTime.UtcNow.AddDays(-7);
+
+                var periodEarnerIds = await _context.PointsTransactions
+                    .Where(pt => pt.CreatedAt >= since && !pt.IsDeleted && pt.Amount > 0)
+                    .GroupBy(pt => pt.UserID)
+                    .OrderByDescending(g => g.Sum(pt => pt.Amount))
+                    .Take(top)
+                    .Select(g => g.Key)
+                    .ToListAsync();
+
+                var periodUsersRaw = await query
+                    .Where(u => periodEarnerIds.Contains(u.UserID))
+                    .ToListAsync();
+
+                // Preserve ranking order from periodEarnerIds (sorted by earned points)
+                leaderboardUsers = periodEarnerIds
+                    .Select(id => periodUsersRaw.FirstOrDefault(u => u.UserID == id))
+                    .Where(u => u != null)
+                    .Cast<User>()
+                    .ToList();
+            }
+            else
+            {
+                leaderboardUsers = await query
+                    .OrderByDescending(u => u.Points)
+                    .Take(top)
+                    .ToListAsync();
             }
 
-            var leaderboardUsers = await query
-                .OrderByDescending(u => u.Points)
-                .Take(top)
-                .ToListAsync();
+            // Calculate user rank
+            int userRank = 0;
+            if (string.IsNullOrEmpty(faculty))
+            {
+                userRank = await _context.Users
+                    .Where(u => !u.IsDeleted)
+                    .CountAsync(u => u.Points > user.Points) + 1;
+            }
+            else
+            {
+                userRank = await _context.Users
+                    .Where(u => !u.IsDeleted && u.Faculty == faculty)
+                    .CountAsync(u => u.Points > user.Points) + 1;
+            }
 
             var faculties = await _context.Users
                 .Where(u => !u.IsDeleted && !string.IsNullOrEmpty(u.Faculty))
@@ -211,6 +329,7 @@ namespace Uni_Connect.Controllers
             ViewBag.SelectedFaculty = faculty;
             ViewBag.SelectedPeriod = string.IsNullOrEmpty(period) ? "All Time" : period;
             ViewBag.Top = top;
+            ViewBag.UserRank = userRank;
 
             return View(user);
         }
@@ -273,11 +392,25 @@ namespace Uni_Connect.Controllers
         }
 
         public async Task<IActionResult> CreatePost()
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return RedirectToAction("Login_Page", "Login");
+
+            // Fetch common tags for the dropdown
+            var commonTags = await _context.Tags
+                .OrderByDescending(t => t.PostTags.Count)
+                .Take(20)
+                .Select(t => t.Name)
+                .ToListAsync();
+
+            if (!commonTags.Any())
             {
-                var user = await GetCurrentUser();
-                if (user == null) return RedirectToAction("Login_Page", "Login");
-                return View(new ViewModels.CreatePostViewModel());
+                commonTags = new List<string> { "Help", "Exam", "Lab", "Assignment", "Project", "Concept", "Error" };
             }
+
+            ViewBag.CommonTags = commonTags;
+            return View(new ViewModels.CreatePostViewModel());
+        }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -329,27 +462,115 @@ namespace Uni_Connect.Controllers
             if (isAjax) return Json(new { success = true, postId = post.PostID, pointsBalance = user.Points });
             return RedirectToAction("Dashboard");
         }
+        
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RequestTutoring(int postId, string description)
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return Unauthorized();
+
+            var success = await _postService.RequestTutoring(postId, user.UserID, description);
+            if (!success) return BadRequest("Could not send tutoring request.");
+
+            return RedirectToAction("SinglePost", new { id = postId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AcceptTutoring(int requestId)
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return Unauthorized();
+
+            var success = await _postService.AcceptTutoring(requestId, user.UserID);
+            if (!success) return BadRequest("Could not accept tutoring request.");
+
+            return RedirectToAction("Sessions");
+        }
 
         public async Task<IActionResult> Sessions()
         {
             var user = await GetCurrentUser();
             if (user == null) return RedirectToAction("Login_Page", "Login");
-            
-            var sessions = await _context.PrivateSessions
-                .Where(s => s.StudentID == user.UserID || s.HelperID == user.UserID)
+
+            var allSessions = await _context.PrivateSessions
+                .Where(s => !s.IsDeleted && (s.StudentID == user.UserID || s.HelperID == user.UserID))
                 .Include(s => s.Student)
                 .Include(s => s.Helper)
                 .Include(s => s.Messages)
                 .ToListAsync();
-            
-            return View(sessions);
+
+            ViewBag.HistorySessions = allSessions.Where(s => !s.IsActive).ToList();
+
+            ViewBag.TutoringRequests = await _context.Requests
+                .Include(r => r.Owner)
+                .Include(r => r.Post)
+                .Where(r => r.Post.UserID == user.UserID && r.Status == "Open")
+                .ToListAsync();
+
+            return View(allSessions.Where(s => s.IsActive).ToList());
         }
 
-        public async Task<IActionResult> ChatPage()
+        public async Task<IActionResult> ChatPage(int id)
         {
             var user = await GetCurrentUser();
             if (user == null) return RedirectToAction("Login_Page", "Login");
+
+            var session = await _context.PrivateSessions
+                .Include(s => s.Student)
+                .Include(s => s.Helper)
+                .Include(s => s.Messages.OrderBy(m => m.SentAt))
+                .FirstOrDefaultAsync(s => s.PrivateSessionID == id && !s.IsDeleted);
+
+            if (session == null || (session.StudentID != user.UserID && session.HelperID != user.UserID))
+                return RedirectToAction("Sessions");
+
+            var otherUser = session.StudentID == user.UserID ? session.Helper : session.Student;
+
+            // Sidebar: other active sessions for this user
+            ViewBag.SidebarSessions = await _context.PrivateSessions
+                .Where(s => !s.IsDeleted && s.IsActive && s.PrivateSessionID != id &&
+                            (s.StudentID == user.UserID || s.HelperID == user.UserID))
+                .Include(s => s.Student)
+                .Include(s => s.Helper)
+                .Include(s => s.Messages)
+                .ToListAsync();
+
+            ViewBag.Session = session;
+            ViewBag.OtherUser = otherUser;
+            ViewBag.CurrentUserId = user.UserID;
             return View(user);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeletePost(int postId)
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return Unauthorized();
+
+            var post = await _context.Posts.FirstOrDefaultAsync(p => p.PostID == postId && p.UserID == user.UserID);
+            if (post == null) return NotFound();
+
+            post.IsDeleted = true;
+            await _context.SaveChangesAsync();
+            return RedirectToAction("Dashboard");
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteAnswer(int answerId)
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return Unauthorized();
+
+            var answer = await _context.Answers.FirstOrDefaultAsync(a => a.AnswerID == answerId && a.UserID == user.UserID);
+            if (answer == null) return NotFound();
+
+            answer.IsDeleted = true;
+            await _context.SaveChangesAsync();
+            return RedirectToAction("SinglePost", new { id = answer.PostID });
         }
 
         public async Task<IActionResult> SinglePost(int id)
@@ -415,6 +636,46 @@ namespace Uni_Connect.Controllers
             return Ok(new { success = true, upvotes = answer?.Upvotes ?? 0 });
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AcceptAnswer(int answerId)
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return Unauthorized();
+
+            var success = await _postService.AcceptAnswer(answerId, user.UserID);
+            if (!success) return BadRequest("Only the question author can accept an answer.");
+
+            return Ok(new { success = true });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetStats()
+        {
+            var user = await GetCurrentUser();
+            if (user == null) return Unauthorized();
+
+            // Calculate level
+            int level = Math.Min(user.Points / 500 + 1, 10);
+            int pointsForCurrentLevel = (level - 1) * 500;
+            int pointsForNextLevel = level * 500;
+            int progressToNextLevel = Math.Max(0, user.Points - pointsForCurrentLevel);
+            int progressPercentage = (int)((progressToNextLevel / (float)(pointsForNextLevel - pointsForCurrentLevel)) * 100);
+
+            var unreadNotifs = await _context.Notifications
+                .CountAsync(n => n.UserID == user.UserID && !n.IsRead && !n.IsDeleted);
+
+            return Json(new
+            {
+                points = user.Points,
+                unreadNotifications = unreadNotifs,
+                level = level,
+                progress = progressPercentage,
+                levelText = $"Level {level}",
+                profileImageUrl = user.ProfileImageUrl ?? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(user.Name)}&background=3D52A0&color=fff&size=80"
+            });
+        }
+
         private async Task<User> GetCurrentUser()
         {
             var userIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -426,26 +687,43 @@ namespace Uni_Connect.Controllers
                 .FirstOrDefaultAsync(u => u.UserID == userId);
         }
 
-        [HttpGet("/api/messages/{roomId}")]
-        public async Task<IActionResult> GetMessages(int roomId)
+        [HttpGet]
+        public async Task<IActionResult> SearchPostsApi(string q)
         {
-            var messages = await _context.Messages
-                .Where(m => m.SessionID == roomId)
-                .OrderBy(m => m.SentAt)
-                .Select(m => new
-                {
-                    m.SenderID,
-                    m.MessageText,
-                    Time = m.SentAt.ToString("HH:mm")
+            if (string.IsNullOrWhiteSpace(q) || q.Length < 3)
+                return Json(new { results = Array.Empty<object>() });
+
+            var lower = q.ToLower();
+            var posts = await _context.Posts
+                .Where(p => !p.IsDeleted &&
+                    (p.Title.ToLower().Contains(lower) ||
+                     (p.CourseCode != null && p.CourseCode.ToLower().Contains(lower)) ||
+                     p.PostTags.Any(pt => pt.Tag.Name.ToLower().Contains(lower))))
+                .Include(p => p.Answers.Where(a => !a.IsDeleted))
+                .OrderByDescending(p => p.Upvotes + p.Answers.Count)
+                .Take(5)
+                .Select(p => new {
+                    id = p.PostID,
+                    title = p.Title,
+                    course = p.CourseCode ?? "",
+                    answers = p.Answers.Count(a => !a.IsDeleted),
+                    votes = p.Upvotes,
+                    solved = p.Answers.Any(a => a.IsAccepted && !a.IsDeleted)
                 })
-                 .ToListAsync();
-            return Ok(messages);
+                .ToListAsync();
 
-
+            return Json(new { results = posts });
         }
+
         private async Task<string?> SaveImage(IFormFile? file, string folder)
         {
             if (file == null || file.Length == 0) return null;
+
+            if (file.Length > 5 * 1024 * 1024) return null;
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExtensions.Contains(ext)) return null;
 
             var uploadsFolder = Path.Combine(_environment.WebRootPath, "uploads", folder);
             if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);

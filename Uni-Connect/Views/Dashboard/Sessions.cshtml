@@ -1,82 +1,210 @@
 @model List<Uni_Connect.Models.PrivateSession>
+@using System.Security.Claims
 @{
     ViewData["Title"] = "Private Sessions";
     Layout = "~/Views/Shared/_DashboardLayout.cshtml";
+    var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+    var tutoringRequests = ViewBag.TutoringRequests as List<Uni_Connect.Models.Request>;
+    var historySessions = ViewBag.HistorySessions as List<Uni_Connect.Models.PrivateSession>;
+    var activeSessions = Model?.Where(s => s.IsActive).ToList() ?? new List<Uni_Connect.Models.PrivateSession>();
+    var requestCount = tutoringRequests?.Count ?? 0;
 }
+
+<style>
+    .sessions-tabs { display: flex; gap: 4px; border-bottom: 2px solid #E2E8F0; margin-bottom: 28px; }
+    .sessions-tab {
+        padding: 10px 22px; font-size: 14px; font-weight: 700; color: #64748B;
+        cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px;
+        border-radius: 6px 6px 0 0; transition: all .15s; background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .sessions-tab.active { color: #3D52A0; border-bottom-color: #3D52A0; background: #EEF2FF; }
+    .sessions-tab:hover:not(.active) { color: #3D52A0; background: #F8FAFF; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .session-card {
+        background: white; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 20px;
+        transition: all .2s; display: block; text-decoration: none; color: inherit;
+    }
+    .session-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(61,82,160,.08); border-color: #3D52A0; }
+    .request-card { background: #EEF2FF; border: 1.5px solid #C7D2FE; border-radius: 12px; padding: 18px; }
+    .history-card { background: white; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 18px; }
+    .badge-count { background: #EF4444; color: white; border-radius: 99px; font-size: 11px; padding: 1px 7px; font-weight: 700; margin-left: 6px; }
+</style>
 
 <div style="max-width: 900px; margin: 0 auto; padding: 20px;">
     <!-- Header -->
-    <div style="margin-bottom: 30px;">
-        <h1 style="font-size: 32px; font-weight: 800; color: #0F172A; margin: 0 0 8px 0;">
-            Private Sessions 💬
-        </h1>
-        <p style="font-size: 15px; color: #64748B; margin: 0;">
-            One-on-one conversations with students and helpers
-        </p>
+    <div style="margin-bottom: 28px;">
+        <h1 style="font-size: 30px; font-weight: 800; color: #0F172A; margin: 0 0 6px 0;">Private Sessions 💬</h1>
+        <p style="font-size: 14px; color: #64748B; margin: 0;">One-on-one conversations with students and helpers</p>
     </div>
 
-    <!-- Sessions List -->
-    @if (Model != null && Model.Count > 0)
-    {
-        <div style="display: grid; gap: 16px;">
-            @foreach (var session in Model.OrderByDescending(s => s.CreatedAt))
+    <!-- Tabs -->
+    <div class="sessions-tabs">
+        <button class="sessions-tab active" onclick="showTab('tab-active', this)">
+            Active Sessions
+            @if (activeSessions.Count > 0)
             {
-                var isStudent = true; // You'll need to get the current user ID to determine this
-                var otherUser = isStudent ? session.Helper : session.Student;
-                var lastMessage = session.Messages?.OrderByDescending(m => m.SentAt).FirstOrDefault();
+                <span class="badge-count" style="background:#3D52A0;">@activeSessions.Count</span>
+            }
+        </button>
+        <button class="sessions-tab" onclick="showTab('tab-requests', this)">
+            Incoming Requests
+            @if (requestCount > 0)
+            {
+                <span class="badge-count">@requestCount</span>
+            }
+        </button>
+        <button class="sessions-tab" onclick="showTab('tab-history', this)">History</button>
+    </div>
 
-                <div style="background: white; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 20px; cursor: pointer; transition: all 0.2s;" 
-                     onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 20px rgba(61,82,160,0.08)'; this.style.borderColor='#3D52A0'"
-                     onmouseout="this.style.transform='none'; this.style.boxShadow='none'; this.style.borderColor='#E2E8F0'">
-                    
-                    <div style="display: flex; gap: 16px; align-items: center;">
-                        <!-- Avatar -->
-                        <img src="https://ui-avatars.com/api/?name=@(otherUser?.Name ?? "User")&background=3D52A0&color=fff&size=56" 
-                             alt="User" style="width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;" />
-                        
-                        <!-- Session Info -->
-                        <div style="flex: 1; min-width: 0;">
-                            <h3 style="font-size: 16px; font-weight: 800; color: #0F172A; margin: 0 0 4px 0;">
-                                @(otherUser?.Name ?? "Unknown")
-                            </h3>
-                            <p style="font-size: 13px; color: #64748B; margin: 0 0 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                @if (lastMessage != null)
-                                {
-                                    @lastMessage.MessageText
-                                }
-                                else
-                                {
-                                    <text>No messages yet</text>
-                                }
-                            </p>
-                            <span style="font-size: 12px; color: #94A3B8;">
-                                @session.CreatedAt.ToString("MMM dd, yyyy")
-                            </span>
-                        </div>
-
-                        <!-- Message Count Badge -->
-                        <div style="text-align: center; flex-shrink: 0;">
-                            <div style="background: #3D52A0; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">
-                                @(session.Messages?.Count(m => !m.IsDeleted) ?? 0)
+    <!-- ── Active Sessions Tab ── -->
+    <div id="tab-active" class="tab-panel active">
+        @if (activeSessions.Count > 0)
+        {
+            <div style="display: grid; gap: 14px;">
+                @foreach (var session in activeSessions.OrderByDescending(s => s.CreatedAt))
+                {
+                    var isStudent = session.StudentID == currentUserId;
+                    var otherUser = isStudent ? session.Helper : session.Student;
+                    var lastMessage = session.Messages?.OrderByDescending(m => m.SentAt).FirstOrDefault();
+                    <a href="@Url.Action("ChatPage", "Dashboard", new { id = session.PrivateSessionID })" class="session-card">
+                        <div style="display: flex; gap: 16px; align-items: center;">
+                            <img src="https://ui-avatars.com/api/?name=@(Uri.EscapeDataString(otherUser?.Name ?? "User"))&background=3D52A0&color=fff&size=56"
+                                 alt="User" style="width:56px; height:56px; border-radius:50%; flex-shrink:0;" />
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:800; font-size:16px; color:#0F172A; margin-bottom:3px;">@(otherUser?.Name ?? "Unknown")</div>
+                                <div style="font-size:13px; color:#64748B; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-bottom:6px;">
+                                    @if (lastMessage != null)
+                                    {
+                                        @lastMessage.MessageText
+                                    }
+                                    else
+                                    {
+                                        <text>No messages yet — click to start chatting</text>
+                                    }
+                                </div>
+                                <span style="font-size:12px; color:#94A3B8;">@session.CreatedAt.ToString("MMM dd, yyyy")</span>
+                            </div>
+                            <div style="text-align:center; flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                                <div style="background:#3D52A0; color:white; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px;">
+                                    @(session.Messages?.Count(m => !m.IsDeleted) ?? 0)
+                                </div>
+                                <span style="font-size:11px; color:#3D52A0; font-weight:700; display:flex; align-items:center; gap:3px;">
+                                    <i data-lucide="external-link" style="width:12px; height:12px;"></i> Open
+                                </span>
                             </div>
                         </div>
+                    </a>
+                }
+            </div>
+        }
+        else
+        {
+            <div style="text-align:center; padding:80px 20px; background:white; border-radius:12px; border:1.5px solid #E2E8F0;">
+                <div style="font-size:40px; margin-bottom:14px;">💬</div>
+                <p style="font-size:17px; font-weight:700; color:#0F172A; margin:0 0 10px 0;">No active sessions</p>
+                <p style="font-size:13px; color:#64748B; margin:0 0 28px 0;">Help a classmate or ask a question to start a session</p>
+                <a asp-action="CreatePost" style="background:linear-gradient(135deg,#3D52A0 0%,#7091E6 100%); color:white; padding:12px 28px; border-radius:8px; text-decoration:none; font-weight:700; font-size:14px;">
+                    ✏️ Ask a Question
+                </a>
+            </div>
+        }
+    </div>
+
+    <!-- ── Incoming Requests Tab ── -->
+    <div id="tab-requests" class="tab-panel">
+        @if (tutoringRequests != null && tutoringRequests.Count > 0)
+        {
+            <div style="display: grid; gap: 14px;">
+                @foreach (var req in tutoringRequests)
+                {
+                    <div class="request-card">
+                        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                            <img src="https://ui-avatars.com/api/?name=@(Uri.EscapeDataString(req.Owner?.Name ?? "User"))&background=7091E6&color=fff&size=44"
+                                 alt="User" style="width:48px; height:48px; border-radius:50%; flex-shrink:0;" />
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:700; font-size:15px; color:#0F172A; margin-bottom:2px;">@(req.Owner?.Name ?? "Unknown")</div>
+                                <div style="font-size:12px; color:#64748B; margin-bottom:5px;">
+                                    On: <strong>@(req.Post?.Title?.Length > 60 ? req.Post.Title.Substring(0, 60) + "…" : req.Post?.Title)</strong>
+                                </div>
+                                <div style="font-size:13px; color:#475569; font-style:italic;">"@req.Description"</div>
+                            </div>
+                            <form asp-action="AcceptTutoring" method="post" style="flex-shrink:0;">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="requestId" value="@req.RequestID" />
+                                <button type="submit"
+                                        style="background:#3D52A0; color:white; border:none; border-radius:8px; padding:10px 22px; font-weight:700; font-size:13px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;"
+                                        onmouseover="this.style.background='#2d3d78'" onmouseout="this.style.background='#3D52A0'">
+                                    <i data-lucide="check-circle" style="width:16px; height:16px;"></i> Accept
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            }
-        </div>
-    }
-    else
-    {
-        <div style="text-align: center; padding: 80px 20px; background: white; border-radius: 12px;">
-            <p style="font-size: 18px; font-weight: 700; color: #0F172A; margin: 0 0 12px 0;">
-                No sessions yet 📭
-            </p>
-            <p style="font-size: 14px; color: #64748B; margin: 0 0 30px 0;">
-                Start a session by asking a question or helping another student
-            </p>
-            <a asp-action="CreatePost" style="background: linear-gradient(135deg, #3D52A0 0%, #7091E6 100%); color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; display: inline-block;">
-                ✏️ Ask Question
-            </a>
-        </div>
-    }
+                }
+            </div>
+        }
+        else
+        {
+            <div style="text-align:center; padding:80px 20px; background:white; border-radius:12px; border:1.5px solid #E2E8F0;">
+                <div style="font-size:40px; margin-bottom:14px;">📭</div>
+                <p style="font-size:17px; font-weight:700; color:#0F172A; margin:0 0 8px 0;">No incoming requests</p>
+                <p style="font-size:13px; color:#64748B; margin:0;">When someone asks you for help, it will show up here</p>
+            </div>
+        }
+    </div>
+
+    <!-- ── History Tab ── -->
+    <div id="tab-history" class="tab-panel">
+        @if (historySessions != null && historySessions.Count > 0)
+        {
+            <div style="display: grid; gap: 14px;">
+                @foreach (var session in historySessions.OrderByDescending(s => s.CreatedAt))
+                {
+                    var isStudent = session.StudentID == currentUserId;
+                    var otherUser = isStudent ? session.Helper : session.Student;
+                    var msgCount = session.Messages?.Count(m => !m.IsDeleted) ?? 0;
+                    <div class="history-card">
+                        <div style="display:flex; gap:14px; align-items:center;">
+                            <img src="https://ui-avatars.com/api/?name=@(Uri.EscapeDataString(otherUser?.Name ?? "User"))&background=94A3B8&color=fff&size=48"
+                                 alt="User" style="width:48px; height:48px; border-radius:50%; flex-shrink:0; filter:grayscale(30%);" />
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:700; font-size:15px; color:#0F172A; margin-bottom:3px;">
+                                    Session with @(otherUser?.Name ?? "Unknown")
+                                </div>
+                                <div style="font-size:12px; color:#64748B;">@session.CreatedAt.ToString("MMM dd, yyyy") · @msgCount messages exchanged</div>
+                            </div>
+                            <span style="background:#F1F5F9; color:#64748B; border-radius:99px; font-size:12px; padding:4px 12px; font-weight:600; flex-shrink:0;">
+                                Completed
+                            </span>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div style="text-align:center; padding:80px 20px; background:white; border-radius:12px; border:1.5px solid #E2E8F0;">
+                <div style="font-size:40px; margin-bottom:14px;">📋</div>
+                <p style="font-size:17px; font-weight:700; color:#0F172A; margin:0 0 8px 0;">No history yet</p>
+                <p style="font-size:13px; color:#64748B; margin:0;">Completed sessions will appear here</p>
+            </div>
+        }
+    </div>
 </div>
+
+@section Scripts {
+<script>
+    function showTab(id, el) {
+        document.querySelectorAll('.sessions-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        el.classList.add('active');
+        document.getElementById(id).classList.add('active');
+    }
+
+    // Auto-open Requests tab if there are incoming requests and URL has #requests
+    if (window.location.hash === '#requests') {
+        const btn = document.querySelectorAll('.sessions-tab')[1];
+        if (btn) showTab('tab-requests', btn);
+    }
+</script>
+}

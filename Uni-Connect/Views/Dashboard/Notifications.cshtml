@@ -57,22 +57,33 @@
                 var (icon, color) = notif.Type switch
                 {
                     "Answer" => ("💬", "var(--indigo)"),
+                    "PostUpvote" => ("🔥", "var(--rose)"),
                     "Upvote" => ("👍", "var(--amber)"),
                     "BestAnswer" => ("⭐", "var(--emerald)"),
                     "SessionAccepted" => ("✅", "var(--emerald)"),
+                    "TutoringRequest" => ("🎓", "var(--indigo)"),
                     _ => ("🔔", "var(--text-2)")
                 };
-                
+
                 var message = notif.Type switch
                 {
                     "Answer" => "Someone answered your question",
+                    "PostUpvote" => "Someone upvoted your question",
                     "Upvote" => "Someone upvoted your post",
                     "BestAnswer" => "Your answer was marked as best!",
-                    "SessionAccepted" => "A tutoring session request was accepted",
+                    "SessionAccepted" => "Your tutoring session request was accepted",
+                    "TutoringRequest" => "A peer wants to tutor you privately — go to Sessions to accept",
                     _ => $"{notif.Type} notification"
                 };
 
-                <a href="#" style="text-decoration: none; color: inherit; display: block;">
+                var url = notif.Type switch
+                {
+                    "Answer" or "PostUpvote" or "Upvote" or "BestAnswer" => Url.Action("SinglePost", "Dashboard", new { id = notif.ReferenceID }),
+                    "SessionAccepted" or "TutoringRequest" => Url.Action("Sessions", "Dashboard"),
+                    _ => "#"
+                };
+
+                <a href="@url" style="text-decoration: none; color: inherit; display: block;">
                     <div class="notif-item">
                         <div class="notif-icon" style="color: @color">@icon</div>
                         <div class="notif-content">

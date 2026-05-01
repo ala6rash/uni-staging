@@ -1,4 +1,4 @@
-@model PointsViewModel
+﻿@model PointsViewModel
 
 @{
     ViewData["Title"] = "Points & Rewards";
@@ -166,9 +166,9 @@
 
 <!-- TABS -->
 <div class="tabs">
-    <div class="tab active" onclick="showTab('tab-venues', this)"><i data-lucide="shopping-bag"></i> Redeem at Venues</div>
+    <div class="tab active" onclick="showTab('tab-venues', this)"><i data-lucide="store"></i> Redeem at Venues</div>
     <div class="tab" onclick="showTab('tab-earn', this)"><i data-lucide="trending-up"></i> How to Earn</div>
-    <div class="tab" onclick="showTab('tab-history', this)"><i data-lucide="history"></i> Transactions</div>
+    <div class="tab" onclick="showTab('tab-history', this)"><i data-lucide="clock"></i> Transactions</div>
     <div class="tab" onclick="showTab('tab-achievements', this)"><i data-lucide="award"></i> Achievements</div>
 </div>
 
@@ -314,14 +314,26 @@
             <p id="modalDesc" style="font-size:14px; color:var(--text-2);">Discount description goes here.</p>
             <div id="modalLoc" style="font-size:12px; color:var(--text-3); margin-top:8px;">📍 Location Info</div>
         </div>
-        <div style="background:var(--indigo-light); border:1.5px solid #C7D7FF; border-radius:14px; padding:20px; text-align:center; margin-bottom:24px;">
-            <div style="font-size:13px; color:var(--text-2); margin-bottom:4px;">This will cost</div>
-            <div id="modalCost" style="font-size:32px; font-weight:900; color:var(--indigo);">200 pts</div>
-            <div style="font-size:12px; color:var(--text-2); margin-top:6px;">Your current balance: <strong>@Model.CurrentPoints pts</strong></div>
+        <div id="modalConfirmState">
+            <div style="background:var(--indigo-light); border:1.5px solid #C7D7FF; border-radius:14px; padding:20px; text-align:center; margin-bottom:24px;">
+                <div style="font-size:13px; color:var(--text-2); margin-bottom:4px;">This will cost</div>
+                <div id="modalCost" style="font-size:32px; font-weight:900; color:var(--indigo);">200 pts</div>
+                <div style="font-size:12px; color:var(--text-2); margin-top:6px;">Your current balance: <strong>@Model.CurrentPoints pts</strong></div>
+            </div>
+            <div style="display:flex; gap:12px;">
+                <button class="btn btn-ghost btn-full" onclick="closeRedeemModal()">Cancel</button>
+                <button class="btn btn-primary btn-full" onclick="confirmRedeem()">Confirm Redeem</button>
+            </div>
         </div>
-        <div style="display:flex; gap:12px;">
-            <button class="btn btn-ghost btn-full" onclick="closeRedeemModal()">Cancel</button>
-            <button class="btn btn-primary btn-full" onclick="confirmRedeem()">Confirm Redeem</button>
+        
+        <!-- SUCCESS STATE -->
+        <div id="modalSuccessState" class="hidden">
+            <div style="background:var(--emerald-light); border:1.5px solid var(--emerald); border-radius:14px; padding:24px; text-align:center; margin-bottom:24px;">
+                <div style="font-size:13px; color:#065F46; font-weight:700; margin-bottom:12px;">SUCCESS! YOUR CODE IS:</div>
+                <div id="couponCode" style="font-size:28px; font-weight:900; color:#065F46; letter-spacing:2px; font-family:monospace; background:white; padding:10px; border-radius:8px; border:2px dashed var(--emerald);">PU-XXXXXXX</div>
+                <div style="font-size:11px; color:#065F46; margin-top:12px;">Screenshot this or check your history tab later.</div>
+            </div>
+            <button class="btn btn-emerald btn-full" onclick="location.reload()">Great, Got it!</button>
         </div>
     </div>
 </div>
@@ -347,6 +359,8 @@
         
         const modal = document.getElementById('redeemModal');
         modal.classList.add('open');
+        document.getElementById('modalConfirmState').classList.remove('hidden');
+        document.getElementById('modalSuccessState').classList.add('hidden');
         document.body.style.overflow = 'hidden';
     }
 
@@ -356,9 +370,55 @@
         document.body.style.overflow = '';
     }
 
-    function confirmRedeem() {
-        showToast("🎉 QR Code sent to your university email!");
-        closeRedeemModal();
+    async function confirmRedeem() {
+        const btn = document.querySelector('.modal-box .btn-primary');
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Processing...";
+
+        const venue = document.getElementById('modalTitle').textContent;
+        const discount = document.getElementById('modalDesc').textContent;
+        const costStr = document.getElementById('modalCost').textContent;
+        const cost = parseInt(costStr);
+
+        try {
+            const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value;
+            const resp = await fetch('@Url.Action("RedeemReward", "Dashboard")', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `venue=${encodeURIComponent(venue)}&discount=${encodeURIComponent(discount)}&cost=${cost}&__RequestVerificationToken=${token}`
+            });
+
+            const result = await resp.json();
+            if (result.success) {
+                document.getElementById('modalConfirmState').classList.add('hidden');
+                document.getElementById('modalSuccessState').classList.remove('hidden');
+                document.getElementById('couponCode').textContent = result.couponCode;
+                
+                showToast("🎉 Reward redeemed successfully!");
+                // Update UI balance if possible
+                const balanceElements = document.querySelectorAll('[id*="Points"], [id*="ptWidget"]');
+                balanceElements.forEach(el => {
+                    if (el.id !== 'sidebarPoints' && el.id !== 'ptWidget') {
+                         el.textContent = result.pointsBalance;
+                    }
+                });
+                // Trigger global stats update
+                if (typeof updateStats === 'function') updateStats();
+                
+                closeRedeemModal();
+            } else {
+                showToast(result.message || "Redemption failed.", "error");
+            }
+        } catch (err) {
+            console.error(err);
+            showToast("Failed to connect to server.", "error");
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
     }
 
     // Close modal on escape
@@ -367,3 +427,4 @@
     });
 </script>
 }
+@Html.AntiForgeryToken()

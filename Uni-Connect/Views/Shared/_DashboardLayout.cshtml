@@ -1,4 +1,4 @@
-@using System.Security.Claims
+﻿@using System.Security.Claims
 
 <!DOCTYPE html>
 <html lang="en">
@@ -25,21 +25,31 @@
                     <span>UniConnect</span>
                 </div>
             </a>
-            <div class="nav-search">
-                <input type="text" class="form-input" placeholder="Search questions..." />
-                <i data-lucide="search" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); color:var(--text-2); pointer-events:none; width:18px; height:18px;"></i>
+            <div style="position:relative; flex:1; max-width:440px; margin:0 14px;">
+                <form class="nav-search" asp-controller="Dashboard" asp-action="Dashboard" method="get" style="margin:0; max-width:100%;">
+                    <input type="text" name="search" id="navSearchInput" class="form-input" placeholder="Search questions..." value="@Context.Request.Query["search"]" autocomplete="off"
+                           oninput="navLiveSearch(this.value)" onblur="setTimeout(hideNavDropdown,200)" onfocus="navLiveSearch(this.value)" />
+                    <button type="submit" style="background:none; border:none; position:absolute; right:12px; top:50%; transform:translateY(-50%); cursor:pointer;">
+                        <i data-lucide="search" style="color:var(--text-2); width:18px; height:18px;"></i>
+                    </button>
+                </form>
+                <div id="navSearchDropdown" style="display:none; position:absolute; top:calc(100% + 6px); left:0; right:0; background:#fff; border:1.5px solid var(--indigo); border-radius:12px; box-shadow:0 12px 40px rgba(61,82,160,.16); z-index:999; max-height:320px; overflow-y:auto;"></div>
             </div>
         </div>
         <div class="nav-actions">
-            <div class="nav-bell" id="notifBell">
+            <div class="nav-bell" id="notifBell" onclick="window.location.href='@Url.Action("Notifications", "Dashboard")'" style="cursor:pointer;">
                 <i data-lucide="bell" style="width:20px; height:20px;"></i>
-                <span class="nav-bell-badge" id="notifBadge">3</span>
+                <span class="nav-bell-badge hidden" id="notifBadge">0</span>
             </div>
             <div style="position: relative;">
                 <button class="nav-user" id="navUserBtn" style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: none; background: none; cursor: pointer; border-radius: 8px; transition: background .2s;" onmouseover="this.style.background='#EEF2FF'" onmouseout="this.style.background='none'">
-                    <div class="av av-sm"><img src="https://ui-avatars.com/api/?name=@(User.FindFirst(ClaimTypes.Name)?.Value ?? "Student")&background=3D52A0&color=fff&size=44" alt="User"/></div>
+                    <div class="av-premium av-sm"><img id="navAvatar" src="https://ui-avatars.com/api/?name=@(User.FindFirst(ClaimTypes.Name)?.Value ?? "Student")&background=3D52A0&color=fff&size=44" alt="User"/></div>
                 </button>
                 <div class="nav-user-dropdown" id="navUserDropdown">
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <a asp-controller="Admin" asp-action="AdminDashboard" class="nav-dropdown-item" style="text-decoration:none; color:var(--rose); font-weight:700;"><i data-lucide="shield-check"></i> Admin Panel</a>
+                    }
                     <a asp-controller="Dashboard" asp-action="Profile" class="nav-dropdown-item" style="text-decoration:none;"><i data-lucide="user"></i> My Profile</a>
                     <a asp-controller="Dashboard" asp-action="Settings" class="nav-dropdown-item" style="text-decoration:none;"><i data-lucide="settings"></i> Settings</a>
                     <hr style="margin:0; border:none; border-top:1px solid #E2E8F0;">
@@ -59,7 +69,7 @@
         <!-- SIDEBAR -->
         <aside class="sidebar" id="sidebar">
             <a asp-controller="Dashboard" asp-action="Profile" class="sidebar-user" style="text-decoration:none;">
-                <div class="av av-md"><img src="https://ui-avatars.com/api/?name=@(User.FindFirst(ClaimTypes.Name)?.Value ?? "Student")&background=3D52A0&color=fff&size=60" alt="User"/></div>
+                <div class="av-premium av-md"><img id="sidebarAvatar" src="https://ui-avatars.com/api/?name=@(User.FindFirst(ClaimTypes.Name)?.Value ?? "Student")&background=3D52A0&color=fff&size=60" alt="User"/></div>
                 <div>
                     <div class="sidebar-user-name">@(User.FindFirst(ClaimTypes.Name)?.Value ?? "Student")</div>
                     <div class="sidebar-user-pts"><i data-lucide="coins" style="width:14px; height:14px; vertical-align: middle; margin-right: 4px;"></i> <span id="sidebarPoints">-</span> points</div>
@@ -67,14 +77,21 @@
             </a>
 
             <nav class="sidebar-nav">
-                <a asp-controller="Dashboard" asp-action="Dashboard" class="nav-item" id="navDashboard"><i data-lucide="layout-dashboard"></i> Home Feed</a>
-                <a asp-controller="Dashboard" asp-action="CreatePost" class="nav-item" id="navCreatePost"><i data-lucide="plus-circle"></i> Ask Question</a>
-                <a asp-controller="Dashboard" asp-action="Sessions" class="nav-item" id="navChat"><i data-lucide="messages-square"></i> Private Sessions <span class="nav-badge">2</span></a>
+                <a asp-controller="Dashboard" asp-action="Dashboard" class="nav-item" id="navDashboard"><i data-lucide="house"></i> Home Feed</a>
+                <a asp-controller="Dashboard" asp-action="CreatePost" class="nav-item" id="navCreatePost"><i data-lucide="circle-plus"></i> Ask Question</a>
+                <a asp-controller="Session" asp-action="ChatPage" class="nav-item" id="navChat"><i data-lucide="message-circle"></i> Private Sessions</a>
                 <a asp-controller="Dashboard" asp-action="Leaderboard" class="nav-item" id="navLeaderboard"><i data-lucide="trophy"></i> Leaderboard</a>
-                <a asp-controller="Dashboard" asp-action="Notifications" class="nav-item" id="navNotifications"><i data-lucide="bell"></i> Notifications <span class="nav-badge">3</span></a>
-                <a asp-controller="Dashboard" asp-action="Profile" class="nav-item" id="navProfile"><i data-lucide="user"></i> My Profile</a>
-                <a asp-controller="Dashboard" asp-action="Points" class="nav-item" id="navPoints"><i data-lucide="coins"></i> Points & Rewards</a>
-                <a asp-controller="Dashboard" asp-action="Settings" class="nav-item" id="navSettings"><i data-lucide="settings"></i> Settings</a>
+                <a asp-controller="Dashboard" asp-action="Notifications" class="nav-item" id="navNotifications"><i data-lucide="bell"></i> Notifications <span class="nav-badge hidden" id="sidebarNotifBadge">0</span></a>
+                <a asp-controller="Dashboard" asp-action="Profile" class="nav-item" id="navProfile"><i data-lucide="circle-user"></i> My Profile</a>
+                <a asp-controller="Dashboard" asp-action="Points" class="nav-item" id="navPoints"><i data-lucide="gem"></i> Points & Rewards</a>
+                
+                @if (User.IsInRole("Admin"))
+                {
+                    <div style="margin: 20px 16px 10px; font-size: 11px; font-weight: 800; color: var(--rose); text-transform: uppercase; letter-spacing: 0.05em;">Admin Control</div>
+                    <a asp-controller="Admin" asp-action="AdminDashboard" class="nav-item admin-nav" style="color:var(--rose)"><i data-lucide="bar-chart-3"></i> System Overview</a>
+                    <a asp-controller="Admin" asp-action="ManageUsers" class="nav-item admin-nav" style="color:var(--rose)"><i data-lucide="users"></i> Manage Users</a>
+                    <a asp-controller="Admin" asp-action="ManageReports" class="nav-item admin-nav" style="color:var(--rose)"><i data-lucide="flag"></i> Reports Feed</a>
+                }
             </nav>
 
             <div class="pts-widget">
@@ -95,6 +112,11 @@
             @RenderBody()
         </div>
     </div>
+
+    <!-- Floating Action Button (Mobile) -->
+    <a asp-controller="Dashboard" asp-action="CreatePost" class="floating-ask-btn">
+        <i data-lucide="plus"></i>
+    </a>
 
     <!-- Sidebar mobile behavior -->
     <script>
@@ -170,11 +192,104 @@
             document.body.appendChild(t);
             setTimeout(() => t.remove(), 3000);
         }
-    </script>
-    <script>
-        // Initialize Lucide icons
-        lucide.createIcons();
+        let lastPoints = null;
+
+        // Fetch user stats
+        async function updateStats() {
+            try {
+                const response = await fetch('@Url.Action("GetStats", "Dashboard")');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Show point gain toast
+                    if (lastPoints !== null && data.points > lastPoints) {
+                        const gain = data.points - lastPoints;
+                        if (typeof showToast === 'function') {
+                            showToast(`+${gain} Points Earned! 🪙`, 'success');
+                        }
+                    }
+                    lastPoints = data.points;
+
+                    // Update points
+                    const sidebarPts = document.getElementById('sidebarPoints');
+                    const ptWidget = document.getElementById('ptWidget');
+                    const ptWidgetBar = document.getElementById('ptWidgetBar');
+                    const ptWidgetSub = document.getElementById('ptWidgetSub');
+                    
+                    if (sidebarPts) sidebarPts.textContent = data.points;
+                    if (ptWidget) ptWidget.textContent = data.points;
+                    if (ptWidgetBar) ptWidgetBar.style.width = data.progress + '%';
+                    if (ptWidgetSub) ptWidgetSub.textContent = data.levelText;
+                    
+                    // Update notifications
+                    const notifBadge = document.getElementById('notifBadge');
+                    const sidebarNotifBadge = document.getElementById('sidebarNotifBadge');
+                    
+                    if (data.unreadNotifications > 0) {
+                        if (notifBadge) {
+                            notifBadge.textContent = data.unreadNotifications;
+                            notifBadge.classList.remove('hidden');
+                        }
+                        if (sidebarNotifBadge) {
+                            sidebarNotifBadge.textContent = data.unreadNotifications;
+                            sidebarNotifBadge.classList.remove('hidden');
+                        }
+                    } else {
+                        if (notifBadge) notifBadge.classList.add('hidden');
+                        if (sidebarNotifBadge) sidebarNotifBadge.classList.add('hidden');
+                    }
+
+                    // Update avatars
+                    const navAv = document.getElementById('navAvatar');
+                    const sidebarAv = document.getElementById('sidebarAvatar');
+                    if (navAv) navAv.src = data.profileImageUrl;
+                    if (sidebarAv) sidebarAv.src = data.profileImageUrl;
+                }
+            } catch (err) {
+                console.error('Failed to fetch stats:', err);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', updateStats);
+
+        // Live search dropdown
+        let _navSearchTimer = null;
+        async function navLiveSearch(q) {
+            q = q.trim();
+            const dd = document.getElementById('navSearchDropdown');
+            if (!dd) return;
+            if (q.length < 2) { dd.style.display = 'none'; return; }
+            clearTimeout(_navSearchTimer);
+            _navSearchTimer = setTimeout(async () => {
+                try {
+                    const resp = await fetch('@Url.Action("SearchPostsApi","Dashboard")?q=' + encodeURIComponent(q));
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    if (!data.results || !data.results.length) { dd.style.display = 'none'; return; }
+                    dd.innerHTML = data.results.map(m => `
+                        <a href="/Dashboard/SinglePost/${m.id}" style="display:flex;gap:10px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid #F1F5F9;text-decoration:none;color:inherit;transition:background .15s;" onmouseover="this.style.background='#EEF2FF'" onmouseout="this.style.background=''">
+                            <div style="flex:1;">
+                                <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px;">${escapeNavHtml(m.title)}</div>
+                                <div style="font-size:11px;color:var(--text-2);">${m.course ? m.course + ' · ' : ''}${m.answers} answers · ${m.votes} votes${m.solved ? ' · ✓ Solved' : ''}</div>
+                            </div>
+                        </a>`).join('') +
+                        `<a href="/Dashboard/Dashboard?search=${encodeURIComponent(q)}" style="display:block;padding:10px 16px;font-size:12px;font-weight:700;color:var(--indigo);text-decoration:none;background:#F8F9FF;">See all results for "${escapeNavHtml(q)}" →</a>`;
+                    dd.style.display = 'block';
+                } catch(e) {}
+            }, 300);
+        }
+        function hideNavDropdown() {
+            const dd = document.getElementById('navSearchDropdown');
+            if (dd) dd.style.display = 'none';
+        }
+        function escapeNavHtml(s) {
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
     </script>
     @await RenderSectionAsync("Scripts", required: false)
+    <script>
+        // Initialize all Lucide icons (runs last so page-specific dynamic content is included)
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    </script>
 </body>
 </html>
